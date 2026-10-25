@@ -1,0 +1,50 @@
+{
+  "name": "travelverse",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "tsx scripts/dev-server.ts",
+    "build": "tsc -p tsconfig.server.json && tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.server.json && tsc -b",
+    "test": "vitest run",
+    "lint": "oxlint",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "check:data": "tsx scripts/check-data.ts",
+    "check": "npm run typecheck && npm run test && npm run check:data && npm run check:secrets",
+    "probe:models": "tsx scripts/probe-models.ts",
+    "smoke:tools": "tsx scripts/smoke-tools.ts",
+    "record:golden": "tsx scripts/record-golden.ts",
+    "bench": "tsx scripts/benchmark-token-factory.ts",
+    "eval": "tsx scripts/eval-mini.ts",
+    "run:once": "tsx scripts/run-once.ts"
+  },
+  "dependencies": {
+    "eventsource-parser": "^4.1.2",
+    "leaflet": "^1.9.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-leaflet": "^5.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "openai": "^7.34.0",
+    "oxlint": "^1.81.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.5"
+  }
+}

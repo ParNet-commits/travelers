@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/plan.ts": {
+      "maxDuration": 300,
+      "supportsCancellation": true
+    },
+    "api/health.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/control",
+      "destination": "/index.html"
+    }
+  ]
+}

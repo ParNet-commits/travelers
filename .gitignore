@@ -1,0 +1,11 @@
+node_modules
+dist
+.vercel
+.env
+.env.*
+!.env.example
+*.local
+probe-report.json
+bench-report.md
+eval-report.md
+coverage
