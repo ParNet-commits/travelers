@@ -5,10 +5,10 @@
 import { CityPack } from "../../../types/travelverse.js";
 import type { CityPack as CityPackT } from "../../../types/travelverse.js";
 
-// import { UDAIPUR } from "./udaipur.js";   <- add after the H4 data prompt creates it
+import { UDAIPUR } from "./udaipur.js";
 
 const RAW_PACKS: readonly unknown[] = [
-  // UDAIPUR,
+  UDAIPUR,
 ];
 
 function normalizeName(s: string): string {
