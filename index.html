@@ -4,10 +4,20 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>travel-verse-main</title>
+    <title>TravelVerse - Plans that check themselves</title>
+    <!-- Preconnect to Google Fonts domain for faster font fetching -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <!-- Preconnect to Google Fonts static asset origin with CORS -->
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Load Fraunces (600 weight) and Inter (400, 500, 600 weights) from Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   </head>
-  <body>
+  <!-- Body element styled with warm sand background, ink text, sans font, and antialiased smoothing -->
+  <body class="bg-sand text-ink font-sans antialiased min-h-screen">
+    <!-- Root mount element for the React application -->
     <div id="root"></div>
+    <!-- Load the main React entry point script as an ES module -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+

@@ -1,55 +1,84 @@
-// Import useState hook from React to manage component state
-import { useState } from 'react'; // React state hook for tracking async fetch data and loading status
+// Import React hooks and type definitions
+import { useEffect, useState, type JSX } from "react"; // React hooks for state and lifecycle
+// Import Header component for brand and status bar
+import { Header } from "./components/Header.js"; // top navigation and agent status header
+// Import PlannerPage component for primary travel planning interface
+import { PlannerPage } from "./pages/PlannerPage.js"; // main travel planner view
+// Import RunProvider to supply shared planning context to the application
+import { RunProvider } from "./state/RunProvider.js"; // context provider for agent run state
 
-// Root application component for TravelVerse scaffold
-export default function App() { // declares and exports the default App component
-  // State variable to store the JSON response string from the health check endpoint
-  const [healthStatus, setHealthStatus] = useState<string>(''); // stores formatted JSON or error message to display in <pre>
-  // State variable to track whether the API request is currently in progress
-  const [isLoading, setIsLoading] = useState<boolean>(false); // controls button disabled state during fetch
+// Intent: Render placeholder component for Control Room admin dashboard coming in milestone P17
+function ControlRoomPlaceholder(): JSX.Element { // helper component for /control route
+  // Render placeholder interface styled with warm cards and typography
+  return ( // returns placeholder JSX
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12"> {/* centered container */}
+      <div className="bg-card border border-line rounded-2xl p-8 shadow-sm space-y-4 text-center"> {/* card box */}
+        <span className="inline-flex items-center text-xs font-semibold tracking-wider uppercase text-marigold"> {/* milestone badge */}
+          Milestone P17 {/* milestone badge text */}
+        </span> {/* closes badge */}
+        <h2 className="text-2xl font-semibold text-ink font-display"> {/* title heading */}
+          Control Room - coming in P17 {/* heading text */}
+        </h2> {/* closes title */}
+        <p className="text-sm text-ink-soft max-w-md mx-auto leading-relaxed"> {/* description */}
+          Live model latency probes, Nebius token consumption, Tavily credit burn, and deep system diagnostics will be available here. {/* explanation text */}
+        </p> {/* closes description */}
+        <div className="pt-4"> {/* actions container */}
+          <a // return to planner navigation link
+            href="/" // link target
+            className="min-h-11 inline-flex items-center px-5 py-2.5 rounded-xl font-medium text-sm text-white bg-lake hover:bg-lake/90 shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake" // accessible button styling
+          > {/* link content */}
+            Back to Planner {/* link label */}
+          </a> {/* closes return link */}
+        </div> {/* closes actions */}
+      </div> {/* closes card box */}
+    </div> // closes container
+  ); // ends return
+} // ends ControlRoomPlaceholder
 
-  // Function to fetch API health status from the backend
-  const checkHealth = async () => { // async event handler for the "Check API" button
-    // Set loading state to true before initiating network request
-    setIsLoading(true); // provides user feedback that the request is running
-    // Wrap fetch in try-catch-finally block to handle network errors safely
-    try { // starts error handling block
-      // Send GET request to /api/health endpoint
-      const response = await fetch('/api/health'); // calls the backend health check route
-      // Parse the JSON response body
-      const data: unknown = await response.json(); // parses JSON payload from response
-      // Set the formatted JSON string into state with indentation
-      const INDENT_SPACES = 2; // number of spaces for JSON formatting indentation
-      setHealthStatus(JSON.stringify(data, null, INDENT_SPACES)); // sets formatted JSON string to healthStatus state
-    } catch (error) { // catches any network or parsing exceptions
-      // Update state with error message if request fails
-      setHealthStatus(String(error)); // displays error in the preformatted box
-    } finally { // cleanup block executed after try or catch
-      // Reset loading indicator back to false
-      setIsLoading(false); // re-enables the button for subsequent clicks
-    } // ends try-catch-finally block
-  }; // ends checkHealth function
+// Intent: Root application component providing routing between /control and / with RunProvider wrapper
+export default function App(): JSX.Element { // exports root App component
+  // State tracking the current browser pathname
+  const [pathname, setPathname] = useState<string>(() => { // initializes pathname from window
+    // Safe check for browser window object
+    if (typeof window !== "undefined") { // window presence check
+      return window.location.pathname; // returns current path
+    } // ends check
+    return "/"; // fallback default path
+  }); // ends useState
 
-  // Render the component interface
-  return ( // returns the JSX tree for the minimal page
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6"> {/* main wrapper container */}
-      <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col items-center text-center shadow-lg"> {/* card container */}
-        <h1 className="text-3xl font-bold tracking-tight text-white mb-2">TravelVerse</h1> {/* application header */}
-        <p className="text-slate-400 text-sm mb-6">Self-correcting travel agent - build in progress</p> {/* project status description */}
-        <button // interactive trigger button
-          type="button" // button element type specification
-          onClick={checkHealth} // binds click handler to checkHealth function
-          disabled={isLoading} // disables button while request is in flight
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-md font-medium text-sm transition-colors cursor-pointer" // Tailwind styling
-        > {/* button element body */}
-          {isLoading ? 'Checking...' : 'Check API'} {/* displays dynamic label based on loading state */}
-        </button> {/* closes button tag */}
-        {healthStatus && ( // conditionally renders the pre element if healthStatus is non-empty
-          <pre className="mt-4 w-full p-4 bg-slate-950 border border-slate-800 rounded-md text-left text-xs font-mono text-emerald-400 overflow-x-auto"> {/* preformatted text block */}
-            {healthStatus} {/* renders JSON content */}
-          </pre> // closes pre tag
-        )} {/* ends conditional render */}
-      </div> {/* closes card container */}
-    </main> // closes main wrapper container
-  ); // ends return statement
-} // ends App function
+  // Listen to browser popstate events for backward and forward navigation
+  useEffect(() => { // lifecycle hook for history changes
+    // Handler function when browser navigation occurs
+    const handlePopState = () => { // popstate event callback
+      setPathname(window.location.pathname); // updates pathname state
+    }; // ends handlePopState
+    // Subscribe to popstate event
+    window.addEventListener("popstate", handlePopState); // registers listener
+    // Cleanup event listener when unmounting
+    return () => { // cleanup function
+      window.removeEventListener("popstate", handlePopState); // unregisters listener
+    }; // ends cleanup
+  }, []); // runs once on mount
+
+  // Check if current path matches control room route
+  const isControlRoom = pathname === "/control"; // boolean check for control route
+
+  // Render root application tree wrapped in RunProvider
+  return ( // returns root application JSX
+    <RunProvider> {/* provides shared planning state across application */}
+      <div className="min-h-screen flex flex-col bg-sand text-ink"> {/* full-height flex layout wrapper */}
+        {/* Navigation header with status pill and brand logo */}
+        <Header /> {/* renders persistent header */}
+
+        {/* Main page content area */}
+        <main className="flex-1"> {/* flex growing main container */}
+          {isControlRoom ? ( // conditional rendering based on path
+            <ControlRoomPlaceholder /> // renders control room placeholder on /control
+          ) : ( // default route
+            <PlannerPage /> // renders main trip planner on all other routes
+          )} {/* ends conditional */}
+        </main> {/* closes main */}
+      </div> {/* closes flex layout wrapper */}
+    </RunProvider> // closes RunProvider
+  ); // ends return
+} // ends App component

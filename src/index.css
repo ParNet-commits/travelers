@@ -1,1 +1,34 @@
+/* Import Tailwind CSS base styles, utilities, and reset rules */
 @import "tailwindcss";
+
+/* Define theme color and typography design tokens for the warm, trustworthy aesthetic */
+@theme {
+  /* Deep primary ink for body text and prominent headings */
+  --color-ink: #1c1b1a;
+  /* Softer muted ink for secondary descriptions and labels */
+  --color-ink-soft: #5b5650;
+  /* Warm sand background representing parchment and warmth */
+  --color-sand: #fbf7f0;
+  /* Crisp white card surface */
+  --color-card: #ffffff;
+  /* Warm subtle border line separating sections */
+  --color-line: #e7dfd3;
+  /* Deep lake blue for trustworthy primary actions and brand emphasis */
+  --color-lake: #1d4e89;
+  /* Soft lake tint for active states and subtle backdrops */
+  --color-lake-soft: #e6eef8;
+  /* Celebratory marigold orange for anniversary warmth and highlights */
+  --color-marigold: #e8a33d;
+  /* Soft marigold tint for gentle notices and badges */
+  --color-marigold-soft: #fdf1dc;
+  /* Natural forest green for success and valid statuses */
+  --color-ok: #2e7d32;
+  /* Amber brown for warnings requiring user attention */
+  --color-warn: #a15c00;
+  /* Crimson red for errors and validation flags */
+  --color-bad: #b3261e;
+  /* Display serif font for emotional, editorial headlines */
+  --font-display: "Fraunces", Georgia, serif;
+  /* Sans-serif font for readable, modern interface typography */
+  --font-sans: "Inter", system-ui, sans-serif;
+}
