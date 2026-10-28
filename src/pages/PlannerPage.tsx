@@ -4,6 +4,12 @@ import { useRef, useState, type JSX, type KeyboardEvent } from "react"; // React
 import { PresetCard } from "../components/PresetCard.js"; // featured story preset card
 // Import TripForm component for user trip input
 import { TripForm } from "../components/TripForm.js"; // customizable travel details form
+// Import AgentTimeline component to display streaming agent activities
+import { AgentTimeline } from "../components/AgentTimeline.js"; // streaming log of agent thoughts and tools
+// Import BudgetMeter component to visualize cost versus budget limit
+import { BudgetMeter } from "../components/BudgetMeter.js"; // accessible animated cost meter
+// Import RuleGrid component to display R0-R8 rule check chips
+import { RuleGrid } from "../components/RuleGrid.js"; // hero verification grid for validation rules
 // Import TripRequest type for sharing preset values between PresetCard and TripForm
 import type { TripRequest } from "../../types/travelverse.js"; // shared trip contract type
 
@@ -131,21 +137,16 @@ export function PlannerPage(): JSX.Element { // exports PlannerPage component
             id="panel-timeline" // panel id matching tab aria-controls
             role="tabpanel" // ARIA tabpanel role
             aria-labelledby="tab-timeline" // associates with timeline tab
-            className={`bg-card border border-line rounded-2xl p-6 shadow-sm space-y-3 ${ // card styling
+            className={`space-y-6 ${ // layout spacing between meter, grid, and timeline
               activeTab === "timeline" ? "block" : "hidden lg:block" // conditionally visible on mobile, always on desktop
             }`} // closes class string
           > {/* timeline panel contents */}
-            <div className="flex items-center justify-between border-b border-line pb-3"> {/* header row */}
-              <h3 className="text-base font-semibold text-ink font-display"> {/* title */}
-                Agent timeline {/* heading text */}
-              </h3> {/* closes heading */}
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-sand text-ink-soft border border-line"> {/* badge */}
-                P12 {/* milestone indicator */}
-              </span> {/* closes badge */}
-            </div> {/* closes header row */}
-            <p className="text-xs text-ink-soft leading-relaxed"> {/* description */}
-              The multi-agent thinking stream, real-time tool checks, and repair critic steps will appear here in phase P12. {/* explanation */}
-            </p> {/* closes description */}
+            {/* Rule verification grid hero visual */}
+            <RuleGrid /> {/* renders R0-R8 validation chip rows */}
+            {/* Dynamic budget progress meter */}
+            <BudgetMeter /> {/* renders cost versus budget meter bar */}
+            {/* Real-time streaming agent activity log */}
+            <AgentTimeline /> {/* renders streaming thought and tool timeline */}
           </div> {/* closes timeline panel */}
         </div> {/* closes left column */}
 
