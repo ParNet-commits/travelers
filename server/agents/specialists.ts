@@ -7,6 +7,7 @@ import {
   ConditionsTriage,
   ExplorePlan,
   MoodProfile,
+  NominatimResult, // schema for validating Nominatim search responses
   PlaceCategory,
   VibeTag,
   type Advisory,
@@ -19,13 +20,16 @@ import {
   type TravelMatrix,
   type TripRequest,
 } from "../../types/travelverse.js";
+import { TIMEOUTS } from "../config.js"; // standard timeout configurations for external tools
 import { convertMinor, formatMoney, mulMinor } from "../engine/money.js";
 import { normalizeId } from "../engine/normalize.js";
-import { TIER_ORDER } from "../engine/profiles.js";
+import { DEFAULT_VISIT_MIN, OUTDOOR_CATEGORY, TIER_ORDER } from "../engine/profiles.js"; // default profiles and visit times
 import { dayCount } from "../../types/travelverse.js";
+import { fetchJson } from "../http/fetchJson.js"; // unified HTTP client with timeouts, retries and cache
 import { BUDGET_SYSTEM, EXPLORER_SYSTEM, MOOD_SYSTEM, TRIAGE_SYSTEM } from "../llm/prompts.js";
 import { defaultRanking, estimateLodging, estimateMeals } from "../orchestrator/context.js";
-import { detectInjection, wrapUntrusted } from "../security/untrusted.js";
+import { detectInjection, sanitizeExternalText, wrapUntrusted } from "../security/untrusted.js"; // untrusted input sanitizers
+import { CATEGORY_VIBES, userAgent } from "../tools/osm.js"; // category vibe mappings and user agent header generator
 import type { WebHit } from "../tools/types.js";
 import { llmJson, short, withTool, type AgentRun } from "./common.js";
 
@@ -109,6 +113,28 @@ export function defaultExplorePlan(req: TripRequest): ExplorePlan {
   return { categories: [...cats].slice(0, 6), radiusKm, note: "Default search plan" };
 }
 
+// Named constants for explorer query bounds and place limits to avoid magic numbers
+const MAX_FALLBACK_QUERY_LIMIT = "25"; // fetch up to 25 attractions from Nominatim fallback
+const MAX_EXPLORER_PACK_PLACES = 10; // keep up to 10 explorer places if curated city pack already exists
+const MAX_EXPLORER_UNCURATED_PLACES = 40; // keep up to 40 explorer places when no curated pack exists
+const NOMINATIM_CACHE_TTL_MS = 7 * 24 * 3_600_000; // 7 days cache TTL in milliseconds for geocoding data
+const SANITIZE_NAME_MAX_LEN = 120; // max length for place name text sanitization
+
+// Helper mapping OpenStreetMap Nominatim item types to PlaceCategory
+function nomCategory(type?: string): PlaceCategory {
+  if (!type) return "heritage"; // fallback when type is missing
+  if (type === "museum" || type === "gallery") return "museum"; // categorize museums and galleries
+  if (type === "viewpoint") return "viewpoint"; // categorize scenic viewpoints
+  if (type === "garden" || type === "park") return "garden"; // categorize parks and gardens
+  if (type === "place_of_worship") return "religious"; // categorize religious temples and shrines
+  if (type === "marketplace") return "market"; // categorize markets
+  if (type === "castle" || type === "palace" || type === "monument" || type === "fort") return "heritage"; // categorize historic sites
+  if (type === "theme_park" || type === "zoo" || type === "aquarium") return "experience"; // categorize entertainment experiences
+  if (type === "theatre") return "show"; // categorize performance venues
+  if (type === "beach" || type === "water") return "waterfront"; // categorize water bodies and beaches
+  return "heritage"; // default category fallback for unclassified attractions
+}
+
 export async function runExplorer(run: AgentRun, req: TripRequest, center: LatLon, pack: CityPack | null): Promise<{ places: Place[] }> {
   const out = await llmJson(run, {
     agent: "explorer",
@@ -128,11 +154,65 @@ export async function runExplorer(run: AgentRun, req: TripRequest, center: LatLo
   });
   const plan = out?.data ?? defaultExplorePlan(req);
   run.emit({ type: "thinking", agent: "explorer", text: `Searching OpenStreetMap for ${plan.categories.join(", ")} within ${plan.radiusKm} km. ${plan.note}`.slice(0, 600) });
-  const found =
+  let found =
     (await withTool(run, "explorer", "overpass.query", { categories: plan.categories.join(","), radiusKm: plan.radiusKm, lat: center.lat, lon: center.lon }, () =>
       run.deps.tools.findPlaces(center, plan.categories, plan.radiusKm, run.signal),
     )) ?? [];
-  return { places: pack ? found.slice(0, 10) : found.slice(0, 40) };
+  // Deterministic fallback: if Overpass servers fail or return zero places for an uncurated city, query Nominatim for attractions
+  if (found.length === 0 && !pack) {
+    const nomPlaces = await withTool(
+      run,
+      "explorer",
+      "nominatim.search",
+      { query: `attractions in ${req.destination}` },
+      async () => {
+        const queryParams = new URLSearchParams({ q: `attractions in ${req.destination}`, format: "jsonv2", limit: MAX_FALLBACK_QUERY_LIMIT }); // construct search query parameters
+        const url = `https://nominatim.openstreetmap.org/search?${queryParams.toString()}`; // build target URL
+        const r = await fetchJson({
+          label: "nominatim", // label for fetch logging and circuit breaker
+          url, // target Nominatim search URL
+          headers: { "user-agent": userAgent(run.deps.config), "accept-language": "en" }, // headers with descriptive user agent
+          schema: NominatimResult, // validate response against NominatimResult schema
+          timeoutMs: TIMEOUTS.nominatimMs, // enforce standard nominatim timeout limit
+          signal: run.signal, // pass run abort signal
+          cacheKey: `nom_attr:${req.destination.trim().toLowerCase()}`, // cache key per destination
+          cacheTtlMs: NOMINATIM_CACHE_TTL_MS, // cache TTL duration
+        });
+        const fallbackList: Place[] = []; // accumulator for extracted places
+        const seenNames = new Set<string>(); // set to avoid duplicate place names
+        for (const item of r.data) {
+          const rawName = item.name || item.display_name.split(",")[0] || ""; // extract first segment of place name
+          const cleanName = sanitizeExternalText(rawName, SANITIZE_NAME_MAX_LEN); // sanitize untrusted external text
+          if (!cleanName || seenNames.has(cleanName.toLowerCase()) || detectInjection(cleanName).length > 0) continue; // skip invalid or injected names
+          seenNames.add(cleanName.toLowerCase()); // record name as seen
+          const cat = nomCategory(item.type); // classify place category from Nominatim type
+          fallbackList.push({
+            id: `osm:n${item.place_id}`, // assign unique OSM place id
+            name: cleanName, // assign sanitized place name
+            category: cat, // assign mapped category
+            location: { lat: item.lat, lon: item.lon }, // assign coordinates
+            visitMin: DEFAULT_VISIT_MIN[cat], // assign default visit duration
+            ticketPerPerson: null, // cost is estimated/unspecified
+            hours: null, // unknown opening hours
+            stepFree: "unverified", // mark accessibility status as unverified
+            outdoor: OUTDOOR_CATEGORY[cat], // set indoor/outdoor flag based on category
+            vibes: CATEGORY_VIBES[cat] ?? ["cultural"], // assign default vibe tags
+            source: "osm", // provenance source
+            osmRef: `node/${item.place_id}`, // OSM node reference
+          });
+        }
+        return {
+          value: fallbackList, // return extracted places array
+          cached: r.cached, // record whether result was cached
+          summary: `${fallbackList.length} attraction(s) found via Nominatim for ${req.destination}`, // summary message
+        };
+      },
+    );
+    if (nomPlaces && nomPlaces.length > 0) {
+      found = nomPlaces; // use Nominatim places if available
+    }
+  }
+  return { places: pack ? found.slice(0, MAX_EXPLORER_PACK_PLACES) : found.slice(0, MAX_EXPLORER_UNCURATED_PLACES) };
 }
 
 export async function runRouteMatrix(run: AgentRun, points: ReadonlyArray<{ id: string; location: LatLon }>): Promise<TravelMatrix | null> {

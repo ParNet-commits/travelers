@@ -41,7 +41,11 @@ export async function geocode(cfg: AppConfig, query: string, signal: AbortSignal
   return { value: { name, center: { lat: first.lat, lon: first.lon } }, cached: r.cached, summary: `Found ${sanitizeExternalText(first.display_name, 120)}` };
 }
 
-const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"] as const;
+// List of public Overpass API interpreter endpoints used in round-robin or fallback order
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter", // main public Overpass instance
+  "https://overpass.private.coffee/api/interpreter", // active reliable public Overpass mirror (replaces decommissioned kumi.systems)
+] as const;
 
 const FILTERS: Readonly<Record<PlaceCategory, readonly string[]>> = {
   heritage: ['nwr["historic"~"^(castle|fort|palace|monument|ruins|archaeological_site|city_gate)$"]["name"]', 'nwr["tourism"="attraction"]["historic"]["name"]'],
@@ -56,7 +60,8 @@ const FILTERS: Readonly<Record<PlaceCategory, readonly string[]>> = {
   show: ['nwr["amenity"="theatre"]["name"]'],
 };
 
-const CATEGORY_VIBES: Readonly<Record<PlaceCategory, VibeTag[]>> = {
+// Exported category-to-vibe mapping used for tagging places found via OSM and fallback search
+export const CATEGORY_VIBES: Readonly<Record<PlaceCategory, VibeTag[]>> = {
   heritage: ["cultural", "photography"],
   museum: ["cultural", "family"],
   viewpoint: ["scenic", "romantic", "photography"],

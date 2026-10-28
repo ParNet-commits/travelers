@@ -12,12 +12,14 @@ import type { BuildMeta } from "../engine/build.js";
 import { draftPlaceIds, rankOf, type NormalizedDraft, type PlanningContext } from "../engine/context.js";
 import { convertMinor, formatMoney, mulMinor } from "../engine/money.js";
 import { lodgingStayMinor, normalizeDraft, normalizeId } from "../engine/normalize.js";
-import { TIER_ORDER } from "../engine/profiles.js";
+import { ON_SITE_WALK_KM, TIER_ORDER } from "../engine/profiles.js"; // imports walking profile mapping and tier order constants for scheduling
 import { applyDirectives, fallbackDirectives, greedyDraft, placeCostMinor, repairToFit } from "../engine/repair.js";
 import { hoursLabel, minToHhmm, weekdayName } from "../engine/time.js";
 import { CRITIC_SYSTEM, PLANNER_SYSTEM } from "../llm/prompts.js";
 import { sanitizeExternalText } from "../security/untrusted.js";
 import { llmJson, short, type AgentRun } from "./common.js";
+
+const DEFAULT_FALLBACK_WALK_KM = 0.8; // default distance in km when place category walk estimate is unavailable
 
 function mealTotalMinor(ctx: PlanningContext, tier: Tier, days = ctx.dates.length): number {
   const m = ctx.meals[tier];
@@ -145,7 +147,16 @@ export function criticBrief(ctx: PlanningContext, itin: FinalItinerary, draft: N
   const view = (id: string) => {
     const p = ctx.places.get(id);
     return p
-      ? { id, name: p.name, category: p.category, cost: f(placeCostMinor(ctx, id)), stepFree: p.stepFree, hours: hoursLabel(p.hours), moodRank: rankOf(ctx, id) + 1 }
+      ? {
+          id,
+          name: p.name,
+          category: p.category,
+          walkKm: p.onSiteWalkKm ?? ON_SITE_WALK_KM[p.category] ?? DEFAULT_FALLBACK_WALK_KM, // provide estimated walk km for critic evaluation
+          cost: f(placeCostMinor(ctx, id)),
+          stepFree: p.stepFree,
+          hours: hoursLabel(p.hours),
+          moodRank: rankOf(ctx, id) + 1,
+        }
       : { id, name: "unknown" };
   };
   const lodging = ctx.lodging.get(draft.lodgingId);
