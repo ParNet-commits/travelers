@@ -13,8 +13,11 @@ import type { // imports types from single source of truth
   Violation, // violation record for rule checks
   VisitItem, // venue stop visit item
 } from "../../types/travelverse.js"; // shared domain contracts
-// Import UI formatting helpers for currency, provenance, and accessibility
+// Import curated FX table containing actual USD exchange rates
+import { FX_TABLE } from "../../server/data/fx.js"; // single source of truth for foreign exchange rates
+// Import UI formatting helpers for currency, provenance, accessibility, and packing tips
 import { // imports display formatting helpers
+  computePackingTip, // computes day packing tip from weather forecast
   formatPlannerDayNumbers, // humanizes 0-indexed day numbers in text
   money, // formats integer minor units to currency strings
   provenanceLabel, // provides human-readable data source labels
@@ -501,13 +504,27 @@ function CostsAccordion({ // helper component for cost breakdown
               </div> {/* closes balance row */}
             </div> {/* closes totals block */}
 
-            {/* Foreign exchange metadata notice */}
-            {costs.fx ? ( // conditional FX notice check
-              <div className="text-[11px] text-ink-soft sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-line"> {/* FX block */}
-                <span>FX as of {costs.fx.asOf}</span> {/* as-of date */}
-                <span className="block text-ink-soft/80">({costs.fx.source})</span> {/* FX source label */}
-              </div> // closes FX block
-            ) : null} {/* ends condition */}
+            {/* Foreign exchange metadata notice with actual exchange rate from FX_TABLE */}
+            {costs.fx ? (() => { // conditional FX notice check
+              // Extract USD to INR rate from FX_TABLE and format to 2 decimal places
+              const usdInrRate = parseFloat(FX_TABLE.perUsd.INR).toFixed(2); // formatted rate string "94.75"
+              // Parse asOf ISO date into UK formatted string e.g. "16 Oct 2026"
+              const fxDateFormatted = new Date(`${costs.fx.asOf}T00:00:00Z`).toLocaleDateString("en-GB", { // format to British date
+                day: "numeric", // day of month e.g. 16
+                month: "short", // short month name e.g. Oct
+                year: "numeric", // full year e.g. 2026
+              }); // ends fxDateFormatted
+              // Strip trailing daily close from source string to leave clean source name
+              const fxCleanSource = costs.fx.source.replace(/\s+daily\s+close/i, ""); // "Pound Sterling Live"
+              // Construct exact required exchange rate display string
+              const fxDisplayLabel = `Exchange rate: 1 USD = ₹${usdInrRate} (as of ${fxDateFormatted}, source: ${fxCleanSource})`; // composite FX label
+
+              return ( // returns FX label block
+                <div className="text-[11px] text-ink-soft sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-line"> {/* FX block */}
+                  <span>{fxDisplayLabel}</span> {/* formatted exchange rate notice */}
+                </div> // closes FX block
+              ); // ends return
+            })() : null} {/* ends condition */}
           </div> {/* closes summary box */}
         </div> // closes collapsible body
       ) : null} {/* ends condition */}
@@ -776,6 +793,8 @@ export function ItineraryView({ onOpenEvidence }: ItineraryViewProps): JSX.Eleme
             const isTabActive = day.dayIndex === currentDayIndex; // active check
             const formattedDate = formatDayDate(day.date); // formatted date string
             const weather = day.weather; // weather forecast object
+            // Compute short packing tip from that day's weather forecast rules
+            const packingTip = computePackingTip(weather); // packing tip string or null
 
             return ( // returns tab button JSX
               <button // tab button
@@ -805,6 +824,12 @@ export function ItineraryView({ onOpenEvidence }: ItineraryViewProps): JSX.Eleme
                     ) : null} {/* ends rain check */}
                   </div> // closes weather row
                 ) : null} {/* ends weather condition */}
+                {packingTip ? ( // conditional packing tip display
+                  <div className={`text-[10px] mt-1 font-medium flex items-center gap-1 ${isTabActive ? "text-sand/90" : "text-lake"}`}> {/* tip row */}
+                    <span aria-hidden="true">💡</span> {/* lightbulb tip icon */}
+                    <span>{packingTip}</span> {/* packing tip text */}
+                  </div> // closes tip row
+                ) : null} {/* ends packing tip condition */}
               </button> // closes tab button
             ); // ends tab return
           })} {/* ends days map */}

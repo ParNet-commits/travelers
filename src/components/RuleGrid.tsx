@@ -1,11 +1,11 @@
 // Import React type definitions and JSX types
 import type { JSX } from "react"; // imports JSX element type
 // Import helpers for model name formatting and rule labels
-import { RULE_SHORT, shortModelName } from "../lib/format.js"; // UI label formatting helpers
+import { RULE_INFO, RULE_SHORT, shortModelName } from "../lib/format.js"; // UI label formatting helpers
 // Import useRun hook to read agent run state and events
 import { useRun } from "../state/RunProvider.js"; // global agent state provider hook
-// Import shared types for RuleId and SSEEvent
-import type { RuleId, SSEEvent } from "../../types/travelverse.js"; // core travel contracts
+// Import shared types for RuleId, RuleOutcome, and SSEEvent
+import type { RuleId, RuleOutcome, SSEEvent } from "../../types/travelverse.js"; // core travel contracts
 
 // Define named constant list of all nine canonical rules in strict evaluation order
 const ALL_RULE_IDS: readonly RuleId[] = [ // array of all rule identifiers from R0 to R8
@@ -22,6 +22,13 @@ const ALL_RULE_IDS: readonly RuleId[] = [ // array of all rule identifiers from 
 
 // Define named constant for empty collection count check
 const EMPTY_COLLECTION_COUNT = 0; // threshold for empty event lists
+
+// Define named constant for 3-column layout modulo calculation
+const GRID_COLUMNS_COUNT = 3; // total columns in rule grid layout
+// Column index constant for first column
+const FIRST_COLUMN_INDEX = 0; // column 0 aligns to left edge
+// Column index constant for third column
+const THIRD_COLUMN_INDEX = 2; // column 2 aligns to right edge
 
 // Intent: Render status icon reflecting pass, fail, warn, or skip validation outcome
 function StatusIcon({ status }: { status: "pass" | "fail" | "warn" | "skip" | "pending" }): JSX.Element { // helper icon component
@@ -81,6 +88,91 @@ function StatusIcon({ status }: { status: "pass" | "fail" | "warn" | "skip" | "p
   ); // ends return
 } // ends StatusIcon helper
 
+// Interface defining properties accepted by RuleChip
+interface RuleChipProps { // specifies RuleChip component inputs
+  readonly ruleId: RuleId; // identifier for rule R0-R8
+  readonly index: number; // grid position index (0 to 8) to calculate tooltip alignment
+  readonly roundKey: string | number; // unique identifier for the evaluation round
+  readonly outcome: RuleOutcome | undefined; // result outcome object if evaluated
+  readonly status: "pass" | "fail" | "warn" | "skip" | "pending"; // evaluation status
+} // ends RuleChipProps interface
+
+// Intent: Render interactive rule chip with keyboard focus, default cursor, and accessible rich tooltip
+function RuleChip({ // helper component for individual rule outcome chip
+  ruleId, // rule ID parameter
+  index, // column alignment index
+  roundKey, // round identifier
+  outcome, // outcome object
+  status, // status string
+}: RuleChipProps): JSX.Element { // returns JSX element
+  // Lookup canonical rule name and plain explanation from RULE_INFO
+  const info = RULE_INFO[ruleId]; // retrieves rule details
+  // Determine plain text for this round's result note
+  const resultNote = outcome // checks if outcome exists
+    ? outcome.note // uses evaluation note
+    : `${ruleId}: ${RULE_SHORT[ruleId]} pending evaluation`; // default pending message
+
+  // Calculate horizontal tooltip alignment based on column index (0=left, 1=center, 2=right)
+  const columnIndex = index % GRID_COLUMNS_COUNT; // modulo arithmetic for 3-column grid
+  let tooltipAlignClass = "left-1/2 -translate-x-1/2"; // default centered position
+  if (columnIndex === FIRST_COLUMN_INDEX) { // first column check
+    tooltipAlignClass = "left-0"; // align tooltip to left edge
+  } else if (columnIndex === THIRD_COLUMN_INDEX) { // third column check
+    tooltipAlignClass = "right-0"; // align tooltip to right edge
+  } // ends alignment logic
+
+  // Determine background and border styles based on rule outcome
+  let styleClasses = "border-line bg-sand/40 text-ink-soft"; // default pending styling
+  if (status === "pass") { // passing outcome styling
+    styleClasses = "border-ok/30 bg-ok/10 text-ok hover:bg-ok/20"; // green ok theme
+  } else if (status === "fail") { // failing outcome styling
+    styleClasses = "border-bad/30 bg-bad/10 text-bad hover:bg-bad/20 font-semibold"; // red bad theme
+  } else if (status === "warn") { // warning outcome styling
+    styleClasses = "border-warn/30 bg-warn/10 text-warn hover:bg-warn/20 font-semibold"; // amber warn theme
+  } else if (status === "skip") { // skipped outcome styling
+    styleClasses = "border-line/70 bg-sand/60 text-ink-soft hover:bg-sand"; // muted sand theme
+  } // ends style conditions
+
+  // Tooltip element DOM ID for accessibility aria-describedby binding
+  const tooltipId = `rule-tooltip-${roundKey}-${ruleId}`; // unique element ID
+
+  // Render chip container with hover, keyboard focus, and embedded tooltip
+  return ( // returns chip JSX
+    <div // interactive chip container
+      key={ruleId} // React key
+      tabIndex={0} // enables keyboard focus via Tab key
+      role="group" // accessible grouping role
+      aria-label={`${ruleId} ${info.name}: ${status}. ${resultNote}`} // screen reader summary
+      aria-describedby={tooltipId} // associates container with tooltip description
+      className={`group relative flex items-center justify-between px-2 py-1.5 rounded-lg border text-xs transition-colors cursor-default select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake focus-visible:ring-offset-1 focus-within:z-30 hover:z-30 ${styleClasses}`} // chip styling with default cursor
+    > {/* chip contents */}
+      <span className="truncate pr-1"> {/* rule label */}
+        {ruleId} {RULE_SHORT[ruleId]} {/* R0 Data, R1 Budget, etc. */}
+      </span> {/* closes rule label */}
+      <StatusIcon status={status} /> {/* status indicator icon */}
+
+      {/* Rich accessible tooltip shown on hover and keyboard focus */}
+      <div // tooltip overlay
+        id={tooltipId} // matching DOM ID
+        role="tooltip" // ARIA tooltip role
+        className={`absolute z-40 pointer-events-none invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100 transition-all duration-150 bottom-full mb-1.5 w-64 p-3 rounded-xl bg-ink text-white text-xs shadow-2xl border border-white/10 ${tooltipAlignClass}`} // tooltip styling
+      > {/* tooltip inner layout */}
+        <div className="font-semibold text-sand flex items-center justify-between gap-1 pb-1.5 border-b border-white/10"> {/* tooltip header */}
+          <span>{ruleId}: {info.name}</span> {/* rule canonical name */}
+          <span className="text-[10px] uppercase font-mono tracking-wider opacity-80">{status}</span> {/* status badge */}
+        </div> {/* closes tooltip header */}
+        <p className="text-[11px] text-white/80 pt-1.5 leading-snug"> {/* rule check description */}
+          {info.description} {/* plain sentence on what it checks */}
+        </p> {/* closes rule check description */}
+        <div className="text-[11px] text-sand/95 pt-2 border-t border-white/10 mt-2 font-medium leading-snug"> {/* round result container */}
+          <span className="text-white/60 font-normal">This round: </span> {/* result prefix label */}
+          {resultNote} {/* this round's result note */}
+        </div> {/* closes round result container */}
+      </div> {/* closes tooltip overlay */}
+    </div> // closes interactive chip container
+  ); // ends return
+} // ends RuleChip helper component
+
 // Intent: Render RuleGrid displaying R0-R8 rule check chips for each iteration round
 export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
   // Access agent run events from context
@@ -134,15 +226,15 @@ export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
 
         {/* 9 inactive rule chips showing what rules will be verified */}
         <div className="grid grid-cols-3 gap-2"> {/* grid container for nine chips */}
-          {ALL_RULE_IDS.map((ruleId) => ( // iterate over all rule ids
-            <div // inactive preview chip
+          {ALL_RULE_IDS.map((ruleId, index) => ( // iterate over all rule ids
+            <RuleChip // renders rule chip for standby preview
               key={ruleId} // React key
-              title={`${ruleId}: ${RULE_SHORT[ruleId]} - Waiting for first draft`} // preview tooltip
-              className="flex items-center justify-between px-2.5 py-1.5 rounded-xl border border-line/60 bg-sand/40 text-ink-soft/70 text-xs font-medium" // chip styling
-            > {/* chip content */}
-              <span className="truncate">{ruleId} {RULE_SHORT[ruleId]}</span> {/* rule label */}
-              <span className="text-[10px] text-ink-soft/50">—</span> {/* standby indicator */}
-            </div> // closes chip
+              ruleId={ruleId} // rule identifier
+              index={index} // column index for tooltip placement
+              roundKey="standby" // standby round identifier
+              outcome={undefined} // no outcome yet in standby
+              status="pending" // pending status
+            /> // closes RuleChip
           ))} {/* ends map */}
         </div> {/* closes grid */}
       </div> // closes card container
@@ -211,38 +303,22 @@ export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
 
               {/* Grid of nine rule outcome chips */}
               <div className="grid grid-cols-3 gap-1.5"> {/* 3-column chip layout */}
-                {ALL_RULE_IDS.map((ruleId) => { // iterate over all nine rule definitions
+                {ALL_RULE_IDS.map((ruleId, index) => { // iterate over all nine rule definitions
                   // Read outcome for this rule in current round
                   const outcome = outcomesByRule.get(ruleId); // gets outcome or undefined
                   // Determine status string
                   const status = outcome ? outcome.status : "pending"; // status string
-                  // Read tooltip note or default explanation
-                  const tooltipText = outcome ? outcome.note : `${ruleId}: ${RULE_SHORT[ruleId]} pending`; // tooltip text
 
-                  // Determine background and border styles based on rule outcome
-                  let styleClasses = "border-line bg-sand/40 text-ink-soft"; // default pending styling
-                  if (status === "pass") { // passing outcome styling
-                    styleClasses = "border-ok/30 bg-ok/10 text-ok hover:bg-ok/20"; // green ok theme
-                  } else if (status === "fail") { // failing outcome styling
-                    styleClasses = "border-bad/30 bg-bad/10 text-bad hover:bg-bad/20 font-semibold"; // red bad theme
-                  } else if (status === "warn") { // warning outcome styling
-                    styleClasses = "border-warn/30 bg-warn/10 text-warn hover:bg-warn/20 font-semibold"; // amber warn theme
-                  } else if (status === "skip") { // skipped outcome styling
-                    styleClasses = "border-line/70 bg-sand/60 text-ink-soft hover:bg-sand"; // muted sand theme
-                  } // ends style conditions
-
-                  // Render individual rule chip
-                  return ( // returns chip JSX
-                    <div // interactive tooltip chip
+                  // Render individual rule chip using RuleChip component
+                  return ( // returns RuleChip JSX
+                    <RuleChip // renders rule outcome chip with rich tooltip
                       key={ruleId} // rule key
-                      title={tooltipText} // native browser tooltip with detailed rule note
-                      className={`flex items-center justify-between px-2 py-1.5 rounded-lg border text-xs transition-colors cursor-help ${styleClasses}`} // styling
-                    > {/* chip contents */}
-                      <span className="truncate pr-1"> {/* rule label */}
-                        {ruleId} {RULE_SHORT[ruleId]} {/* R0 Data, R1 Budget, etc. */}
-                      </span> {/* closes rule label */}
-                      <StatusIcon status={status} /> {/* status indicator icon */}
-                    </div> // closes chip
+                      ruleId={ruleId} // rule identifier
+                      index={index} // column index for tooltip placement
+                      roundKey={roundNumber} // round number identifier
+                      outcome={outcome} // evaluated outcome
+                      status={status} // current status
+                    /> // closes RuleChip
                   ); // ends return
                 })} {/* ends map */}
               </div> {/* closes 3-column grid */}
@@ -283,38 +359,22 @@ export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
 
             {/* Grid of nine rule outcome chips for the final plan */}
             <div className="grid grid-cols-3 gap-1.5"> {/* 3-column chip layout */}
-              {ALL_RULE_IDS.map((ruleId) => { // iterate over all nine rule definitions
+              {ALL_RULE_IDS.map((ruleId, index) => { // iterate over all nine rule definitions
                 // Read outcome for this rule in final plan
                 const outcome = finalOutcomesByRule.get(ruleId); // gets outcome or undefined
                 // Determine status string
                 const status = outcome ? outcome.status : "pending"; // status string
-                // Read tooltip note or default explanation
-                const tooltipText = outcome ? outcome.note : `${ruleId}: ${RULE_SHORT[ruleId]} pending`; // tooltip text
 
-                // Determine background and border styles based on rule outcome
-                let styleClasses = "border-line bg-sand/40 text-ink-soft"; // default pending styling
-                if (status === "pass") { // passing outcome styling
-                  styleClasses = "border-ok/30 bg-ok/10 text-ok hover:bg-ok/20"; // green ok theme
-                } else if (status === "fail") { // failing outcome styling
-                  styleClasses = "border-bad/30 bg-bad/10 text-bad hover:bg-bad/20 font-semibold"; // red bad theme
-                } else if (status === "warn") { // warning outcome styling
-                  styleClasses = "border-warn/30 bg-warn/10 text-warn hover:bg-warn/20 font-semibold"; // amber warn theme
-                } else if (status === "skip") { // skipped outcome styling
-                  styleClasses = "border-line/70 bg-sand/60 text-ink-soft hover:bg-sand"; // muted sand theme
-                } // ends style conditions
-
-                // Render individual rule chip for final plan
-                return ( // returns chip JSX
-                  <div // interactive tooltip chip
+                // Render individual rule chip for final plan using RuleChip component
+                return ( // returns RuleChip JSX
+                  <RuleChip // renders final rule outcome chip with rich tooltip
                     key={ruleId} // rule key
-                    title={tooltipText} // native browser tooltip with detailed rule note
-                    className={`flex items-center justify-between px-2 py-1.5 rounded-lg border text-xs transition-colors cursor-help ${styleClasses}`} // styling
-                  > {/* chip contents */}
-                    <span className="truncate pr-1"> {/* rule label */}
-                      {ruleId} {RULE_SHORT[ruleId]} {/* R0 Data, R1 Budget, etc. */}
-                    </span> {/* closes rule label */}
-                    <StatusIcon status={status} /> {/* status indicator icon */}
-                  </div> // closes chip
+                    ruleId={ruleId} // rule identifier
+                    index={index} // column index for tooltip placement
+                    roundKey="final" // final round identifier
+                    outcome={outcome} // evaluated final outcome
+                    status={status} // final status
+                  /> // closes RuleChip
                 ); // ends return
               })} {/* ends map */}
             </div> {/* closes 3-column grid */}

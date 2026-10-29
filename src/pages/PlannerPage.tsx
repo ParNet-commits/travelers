@@ -10,6 +10,8 @@ import { AgentTimeline } from "../components/AgentTimeline.js"; // streaming log
 import { BudgetMeter } from "../components/BudgetMeter.js"; // accessible animated cost meter
 // Import RuleGrid component to display R0-R8 rule check chips
 import { RuleGrid } from "../components/RuleGrid.js"; // hero verification grid for validation rules
+// Import WhileWeCheckCard component to display rotating destination facts and agent checks during live plan
+import { WhileWeCheckCard } from "../components/WhileWeCheckCard.js"; // live plan rotating info card
 // Import ItineraryView component to display finalized or draft itinerary
 import { ItineraryView } from "../components/ItineraryView.js"; // comprehensive itinerary, cost breakdown, and checks view
 // Import EvidenceDrawer component and EvidenceTarget interface for accessibility proof inspection
@@ -243,6 +245,8 @@ export function PlannerPage(): JSX.Element { // exports PlannerPage component
             <RuleGrid /> {/* renders R0-R8 validation chip rows */}
             {/* Dynamic budget progress meter */}
             <BudgetMeter /> {/* renders cost versus budget meter bar */}
+            {/* Live checking facts card visible only during active live planning */}
+            <WhileWeCheckCard /> {/* renders rotating destination facts and agent updates */}
             {/* Real-time streaming agent activity log */}
             <AgentTimeline onOpenEvidence={handleOpenEvidence} /> {/* renders streaming thought and tool timeline */}
           </div> {/* closes timeline panel */}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPlannerDayNumbers, money, provenanceLabel, shortModelName } from "../src/lib/format.js";
+import { computePackingTip, formatPlannerDayNumbers, money, provenanceLabel, RULE_INFO, shortModelName } from "../src/lib/format.js";
 
 describe("UI formatting", () => {
   it("formats minor units with the currency's decimals", () => {
@@ -19,6 +19,38 @@ describe("UI formatting", () => {
     expect(formatPlannerDayNumbers("Planning Day 0 to Day 3 in Udaipur")).toBe("Planning Day 1 to Day 4 in Udaipur");
     expect(formatPlannerDayNumbers("Reduce walking distance on Day 0")).toBe("Reduce walking distance on Day 1");
     expect(formatPlannerDayNumbers("Day 1 to Day 4 already 1-indexed")).toBe("Day 1 to Day 4 already 1-indexed");
+  });
+  it("defines canonical names and descriptions for all rules R0 to R8", () => {
+    const ruleIds = ["R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"] as const;
+    for (const id of ruleIds) {
+      expect(RULE_INFO[id].name).toBeTruthy();
+      expect(RULE_INFO[id].description.length).toBeGreaterThan(15);
+    }
+  });
+  it("computes packing tips according to weather criteria", () => {
+    // Rain >= 30% -> Carry an umbrella
+    expect(
+      computePackingTip({ date: "2026-11-15", weatherCode: 61, label: "Rainy", tMaxC: 25, tMinC: 18, rainProbPct: 40 }),
+    ).toBe("Carry an umbrella");
+
+    // tMaxC >= 32 -> Sun hat and water
+    expect(
+      computePackingTip({ date: "2026-11-15", weatherCode: 0, label: "Clear", tMaxC: 34, tMinC: 22, rainProbPct: 5 }),
+    ).toBe("Sun hat and water");
+
+    // tMinC <= 15 -> Light jacket for the evening
+    expect(
+      computePackingTip({ date: "2026-11-15", weatherCode: 0, label: "Clear", tMaxC: 24, tMinC: 13, rainProbPct: 0 }),
+    ).toBe("Light jacket for the evening");
+
+    // No rule match -> null
+    expect(
+      computePackingTip({ date: "2026-11-15", weatherCode: 0, label: "Pleasant", tMaxC: 28, tMinC: 19, rainProbPct: 10 }),
+    ).toBeNull();
+
+    // Null/undefined weather -> null
+    expect(computePackingTip(null)).toBeNull();
+    expect(computePackingTip(undefined)).toBeNull();
   });
 });
 
