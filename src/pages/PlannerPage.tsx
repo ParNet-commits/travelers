@@ -1,5 +1,5 @@
 // Import React core hooks, lazy loading utilities, and event types
-import { lazy, Suspense, useRef, useState, type JSX, type KeyboardEvent } from "react"; // React hooks, lazy/suspense, and event types
+import { lazy, Suspense, useMemo, useRef, useState, type JSX, type KeyboardEvent } from "react"; // React hooks, lazy/suspense, and event types
 // Import PresetCard component for Riya's gift story
 import { PresetCard } from "../components/PresetCard.js"; // featured story preset card
 // Import TripForm component for user trip input
@@ -12,6 +12,10 @@ import { BudgetMeter } from "../components/BudgetMeter.js"; // accessible animat
 import { RuleGrid } from "../components/RuleGrid.js"; // hero verification grid for validation rules
 // Import ItineraryView component to display finalized or draft itinerary
 import { ItineraryView } from "../components/ItineraryView.js"; // comprehensive itinerary, cost breakdown, and checks view
+// Import EvidenceDrawer component and EvidenceTarget interface for accessibility proof inspection
+import { EvidenceDrawer, type EvidenceTarget } from "../components/EvidenceDrawer.js"; // accessible modal drawer
+// Import useRun hook to read active draft and final itinerary from context
+import { useRun } from "../state/RunProvider.js"; // global agent state provider hook
 // Import TripRequest type for sharing preset values between PresetCard and TripForm
 import type { TripRequest } from "../../types/travelverse.js"; // shared trip contract type
 
@@ -64,14 +68,81 @@ const NEXT_INDEX_OFFSET = 1; // positive step for moving right
 // Constant zero index representing the start of an array
 const FIRST_ARRAY_INDEX = 0; // index of first item
 
+// Constant layout rendering delay in milliseconds before triggering smooth scroll
+const AUTO_SCROLL_DELAY_MS = 60; // layout rendering delay constant
+
 // Intent: Render PlannerPage with two-column responsive desktop layout and accessible mobile tabs
 export function PlannerPage(): JSX.Element { // exports PlannerPage component
+  // Access global agent run state to derive active itinerary and evidence items
+  const { state } = useRun(); // reads run state including draft and final itinerary
   // Track active mobile tab with 'plan' as initial view
   const [activeTab, setActiveTab] = useState<MobileTab>("plan"); // active mobile tab state
   // Track preset trip to populate TripForm when preset is selected
   const [presetTrip, setPresetTrip] = useState<TripRequest | null>(null); // holds TripRequest from PresetCard
   // Store refs to tab button elements for keyboard navigation management
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]); // array of button refs
+  // Track place or lodging identifier whose evidence is currently inspected in EvidenceDrawer
+  const [selectedEvidencePlaceId, setSelectedEvidencePlaceId] = useState<string | null>(null); // target place ID
+  // State controlling visibility of the accessible EvidenceDrawer
+  const [isEvidenceDrawerOpen, setIsEvidenceDrawerOpen] = useState<boolean>(false); // drawer open boolean
+
+  // Memoize active evidence target derived from current place selection and planning state
+  const selectedEvidenceTarget = useMemo<EvidenceTarget | null>(() => { // resolves evidence target
+    if (!selectedEvidencePlaceId) { // guard against empty place id
+      return null; // returns null when no place selected
+    } // ends check
+    const it = state.final ?? state.draft; // resolves active itinerary
+    if (!it) { // guard against missing plan
+      return null; // returns null when no plan exists
+    } // ends check
+    // Check if place id matches the hotel lodging
+    if (it.lodging.id === selectedEvidencePlaceId) { // check lodging match
+      return { // returns lodging evidence target
+        id: it.lodging.id, // hotel id
+        name: it.lodging.name, // hotel name
+        stepFree: it.lodging.stepFree, // accessibility rating
+        evidence: it.lodging.evidence ?? [], // evidence records
+        isLodging: true, // marks entity as hotel
+      }; // ends lodging target
+    } // ends lodging check
+    // Search across visit items in all days
+    for (const day of it.days) { // iterate through days
+      for (const item of day.items) { // iterate through items in day
+        if (item.kind === "visit" && item.placeId === selectedEvidencePlaceId) { // check visit match
+          return { // returns visit evidence target
+            id: item.placeId, // place id
+            name: item.name, // place name
+            stepFree: item.stepFree, // accessibility rating
+            evidence: item.evidence ?? [], // evidence records
+            isLodging: false, // marks entity as stop
+          }; // ends visit target
+        } // ends visit match check
+      } // ends items loop
+    } // ends days loop
+    return null; // returns null if place is not found in active plan
+  }, [selectedEvidencePlaceId, state.final, state.draft]); // recomputes when id or plan updates
+
+  // Handler to open evidence drawer for a given place or hotel ID
+  const handleOpenEvidence = (placeId: string) => { // opens drawer with target place
+    setSelectedEvidencePlaceId(placeId); // sets active place id
+    setIsEvidenceDrawerOpen(true); // reveals evidence drawer
+  }; // ends handleOpenEvidence
+
+  // Handler to close evidence drawer
+  const handleCloseEvidence = () => { // closes evidence drawer
+    setIsEvidenceDrawerOpen(false); // hides drawer
+  }; // ends handleCloseEvidence
+
+  // Intent: Automatically switch to timeline tab on mobile and scroll to live timeline
+  const handlePlanStarted = () => { // callback invoked when planning begins
+    setActiveTab("timeline"); // switches mobile view to timeline tab
+    setTimeout(() => { // delay allows DOM tab panel to display before scrolling
+      const timelineElement = document.getElementById("panel-timeline"); // locates timeline panel element
+      if (timelineElement) { // element check
+        timelineElement.scrollIntoView({ behavior: "smooth", block: "start" }); // smooth scroll to timeline
+      } // ends element check
+    }, AUTO_SCROLL_DELAY_MS); // layout rendering delay
+  }; // ends handlePlanStarted
 
   // Handle keyboard navigation between tabs according to ARIA tabs pattern
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => { // keydown event handler
@@ -154,9 +225,9 @@ export function PlannerPage(): JSX.Element { // exports PlannerPage component
             className={`space-y-6 ${activeTab === "plan" ? "block" : "hidden lg:block"}`} // conditionally visible on mobile, always on desktop
           > {/* plan panel contents */}
             {/* Riya's gift featured preset card */}
-            <PresetCard onSelectPreset={(trip) => setPresetTrip(trip)} /> {/* renders preset card */}
+            <PresetCard onSelectPreset={(trip) => setPresetTrip(trip)} onPlanStarted={handlePlanStarted} /> {/* renders preset card */}
             {/* Customizable trip request form */}
-            <TripForm presetTrip={presetTrip} /> {/* renders trip form */}
+            <TripForm presetTrip={presetTrip} onPlanStarted={handlePlanStarted} /> {/* renders trip form */}
           </div> {/* closes plan panel */}
 
           {/* Timeline Tab Panel for mobile, always placed in left column on desktop */}
@@ -173,14 +244,14 @@ export function PlannerPage(): JSX.Element { // exports PlannerPage component
             {/* Dynamic budget progress meter */}
             <BudgetMeter /> {/* renders cost versus budget meter bar */}
             {/* Real-time streaming agent activity log */}
-            <AgentTimeline /> {/* renders streaming thought and tool timeline */}
+            <AgentTimeline onOpenEvidence={handleOpenEvidence} /> {/* renders streaming thought and tool timeline */}
           </div> {/* closes timeline panel */}
         </div> {/* closes left column */}
 
         {/* Right Column (Desktop flexible remaining width): Itinerary above Map */}
         <div className={`w-full flex-1 space-y-6 ${activeTab === "map" ? "block" : "hidden lg:block"}`}> {/* right column responsive visibility */}
           {/* Itinerary Section: displays working draft or finalized itinerary with costs and checks */}
-          <ItineraryView /> {/* renders comprehensive day-by-day itinerary and checks */}
+          <ItineraryView onOpenEvidence={handleOpenEvidence} /> {/* renders comprehensive day-by-day itinerary and checks */}
 
           {/* Map Section: Visible on desktop and on mobile 'map' tab */}
           <div // map panel wrapper
@@ -194,6 +265,13 @@ export function PlannerPage(): JSX.Element { // exports PlannerPage component
           </div> {/* closes map panel */}
         </div> {/* closes right column */}
       </div> {/* closes main content layout */}
+
+      {/* Accessible slide-out evidence drawer */}
+      <EvidenceDrawer // modal drawer for inspection of verified sources and quotes
+        isOpen={isEvidenceDrawerOpen} // drawer open state
+        target={selectedEvidenceTarget} // target stop or lodging details
+        onClose={handleCloseEvidence} // close handler
+      /> {/* closes EvidenceDrawer */}
     </div> // closes page wrapper
   ); // ends return
 } // ends PlannerPage component

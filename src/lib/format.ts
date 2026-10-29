@@ -66,3 +66,37 @@ export const RULE_SHORT: Record<string, string> = {
   R7: "Day length",
   R8: "Rest",
 };
+
+// Constant offset to convert 0-indexed day numbers into 1-indexed user display numbers
+const ONE_BASED_DAY_OFFSET = 1; // offset added to day numbers
+
+// Intent: Transform 0-indexed day references from Planner/Critic text into friendly 1-indexed days (Day 1 to Day 4)
+export function formatPlannerDayNumbers(text: string): string { // exports helper function
+  // Guard clause for falsy or empty string input
+  if (!text) { // checks if text is empty
+    return ""; // returns empty string safely
+  } // ends guard
+
+  // Check if text refers to 0-indexed days (e.g. "Day 0", "day 0", "Day 0 to Day 3", etc.)
+  const hasZeroIndexedDay = /\bday\s*0\b/i.test(text); // detects presence of Day 0
+  if (!hasZeroIndexedDay) { // checks if zero-indexed day is absent
+    return text; // returns original text without modifications
+  } // ends zero index check
+
+  // Single-pass replacement for day ranges ("Day 0 to Day 3", "Day 0 - 3") and individual days ("Day 0")
+  return text.replace( // regex replacement
+    /\b([Dd]ay)\s*(\d+)(?:\s*(-|–|to|through)\s*([Dd]ay\s*)?(\d+))?\b/g, // captures range or single day
+    (_match, prefix, startStr, sep, secondPrefix, endStr) => { // replacement callback
+      const startNum = parseInt(startStr, 10); // parses start day number
+      // Check if end day number exists in range
+      if (endStr !== undefined) { // range check
+        const endNum = parseInt(endStr, 10); // parses end day number
+        const secondDayPrefix = secondPrefix ? secondPrefix : ""; // optional second prefix like 'Day '
+        return `${prefix} ${startNum + ONE_BASED_DAY_OFFSET} ${sep} ${secondDayPrefix}${endNum + ONE_BASED_DAY_OFFSET}`; // returns shifted range
+      } // ends range check
+      // Format single day reference
+      return `${prefix} ${startNum + ONE_BASED_DAY_OFFSET}`; // returns shifted single day
+    } // ends callback
+  ); // ends replace
+} // ends formatPlannerDayNumbers
+

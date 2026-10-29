@@ -2,23 +2,28 @@
 import { useState, type JSX, type KeyboardEvent } from "react"; // React primitives for local UI state and events
 // Import shared contracts from travelverse schema
 import type { // imports types from single source of truth
+  CostBreakdown, // overall cost breakdown schema
   CostCategory, // category union for cost classification
   CostLine, // line item record for cost breakdown
-  DayPlan, // single day itinerary container
   ItineraryItem, // union of visit, transit, meal, and rest items
   PricedAmount, // monetary amount with provenance and currency
   StepFreeStatus, // accessibility rating enum
   TransitItem, // transit travel segment item
+  ValidationReport, // report containing rule validation outcomes
+  Violation, // violation record for rule checks
   VisitItem, // venue stop visit item
 } from "../../types/travelverse.js"; // shared domain contracts
 // Import UI formatting helpers for currency, provenance, and accessibility
 import { // imports display formatting helpers
+  formatPlannerDayNumbers, // humanizes 0-indexed day numbers in text
   money, // formats integer minor units to currency strings
   provenanceLabel, // provides human-readable data source labels
   STEP_FREE_LABEL, // maps step-free status enum to user-facing strings
 } from "../lib/format.js"; // centralized display helpers
 // Import run context hook to access global agent planning state
 import { useRun } from "../state/RunProvider.js"; // global agent state provider hook
+// Import AccessibilityAudit component to display step-free verification stats and citations
+import { AccessibilityAudit } from "./AccessibilityAudit.js"; // accessibility audit badge and source citations
 
 // Define named constant for zero minor units
 const ZERO_MINOR_UNITS = 0; // baseline minor currency value
@@ -379,7 +384,7 @@ function ItineraryItemRow({ // helper component for timeline items
 function CostsAccordion({ // helper component for cost breakdown
   costs, // cost breakdown data object
 }: { // props specification
-  costs: NonNullable<DayPlan> extends never ? never : any; // CostBreakdown type
+  costs: CostBreakdown; // CostBreakdown type
 }): JSX.Element { // returns JSX element
   // Local state managing whether the accordion section is expanded
   const [isOpen, setIsOpen] = useState<boolean>(true); // accordion expansion state
@@ -514,15 +519,15 @@ function CostsAccordion({ // helper component for cost breakdown
 function ChecksPanel({ // helper component for validation rules
   validation, // validation report object
 }: { // props specification
-  validation: NonNullable<DayPlan> extends never ? never : any; // ValidationReport type
+  validation: ValidationReport; // ValidationReport type
 }): JSX.Element { // returns JSX element
   // Filter hard rule violations from report
   const hardViolations = validation.violations.filter( // filter violations
-    (v: any) => v.severity === "hard", // match hard severity
+    (v: Violation) => v.severity === "hard", // match hard severity
   ); // ends filter
   // Filter soft rule warnings from report
   const softViolations = validation.violations.filter( // filter violations
-    (v: any) => v.severity === "soft", // match soft severity
+    (v: Violation) => v.severity === "soft", // match soft severity
   ); // ends filter
 
   // Check if all hard rules passed
@@ -556,7 +561,7 @@ function ChecksPanel({ // helper component for validation rules
           </div> // closes success banner
         ) : ( // render list of hard rule failures
           <div className="space-y-2"> {/* violations list */}
-            {hardViolations.map((violation: any, idx: number) => ( // iterate over hard violations
+            {hardViolations.map((violation: Violation, idx: number) => ( // iterate over hard violations
               <div // violation card
                 key={`hard-${violation.code}-${idx}`} // React key
                 className="flex items-start gap-2.5 p-3 rounded-xl bg-bad/10 border border-bad/30 text-bad text-xs" // card styling
@@ -581,7 +586,7 @@ function ChecksPanel({ // helper component for validation rules
             Soft Advisories ({softViolations.length}) {/* advisory count */}
           </span> {/* closes subtitle */}
           <div className="space-y-2"> {/* advisories list */}
-            {softViolations.map((warning: any, idx: number) => ( // iterate over soft violations
+            {softViolations.map((warning: Violation, idx: number) => ( // iterate over soft violations
               <div // warning card
                 key={`soft-${warning.code}-${idx}`} // React key
                 className="flex items-start gap-2.5 p-3 rounded-xl bg-warn/10 border border-warn/30 text-warn text-xs" // card styling
@@ -816,7 +821,7 @@ export function ItineraryView({ onOpenEvidence }: ItineraryViewProps): JSX.Eleme
             {/* Day theme heading */}
             <div className="flex items-center justify-between border-b border-line pb-2.5"> {/* theme row */}
               <h3 className="text-sm font-semibold text-ink font-display"> {/* theme title */}
-                Day {activeDayPlan.dayIndex + ONE_BASED_OFFSET}: {activeDayPlan.theme} {/* day theme text */}
+                Day {activeDayPlan.dayIndex + ONE_BASED_OFFSET}: {formatPlannerDayNumbers(activeDayPlan.theme)} {/* day theme text with 1-based days */}
               </h3> {/* closes title */}
               <span className="text-xs text-ink-soft"> {/* items count */}
                 {activeDayPlan.items.length} segments {/* segment count */}
@@ -839,6 +844,9 @@ export function ItineraryView({ onOpenEvidence }: ItineraryViewProps): JSX.Eleme
 
       {/* 6. "Costs" accordion: grouped categories with subtotals, grand total, and FX details */}
       <CostsAccordion costs={it.costs} /> {/* renders costs accordion */}
+
+      {/* Accessibility audit badge, statistics line, verified sources, and Tavily attribution */}
+      <AccessibilityAudit audit={it.audit} /> {/* renders accessibility audit */}
 
       {/* 7. "Checks" panel: hard constraints and soft advisories */}
       <ChecksPanel validation={it.validation} /> {/* renders checks panel */}

@@ -9,6 +9,8 @@ import { useRun } from "../state/RunProvider.js"; // global run context consumer
 export interface TripFormProps { // props interface for TripForm
   // Optional preset trip to populate initial values or update form fields
   presetTrip?: TripRequestType | null; // incoming preset data to populate form
+  // Optional callback invoked when planning starts to scroll timeline and switch tab
+  onPlanStarted?: () => void; // callback notifying parent of planning activation
 } // ends props interface
 
 // Constant for maximum allowed characters in mood description textarea
@@ -25,9 +27,29 @@ const DEFAULT_CURRENCY: CurrencyCode = "USD"; // fallback currency
 const DEFAULT_TRAVELER_COUNT_STR = "2"; // fallback traveler count
 // Constant default budget string
 const DEFAULT_BUDGET_AMOUNT_STR = "900"; // fallback budget amount
+// Constant single day offset increment
+const SINGLE_DAY_INCREMENT = 1; // day increment constant
+// Constant month offset to convert 0-indexed month to 1-indexed calendar month
+const MONTH_OFFSET_ONE = 1; // month offset constant
+
+// Intent: Compute current calendar date in local timezone as YYYY-MM-DD string
+function getTodayIsoDate(): string { // helper for today's ISO date
+  const now = new Date(); // current date instance
+  const year = now.getFullYear(); // 4-digit year
+  const month = String(now.getMonth() + MONTH_OFFSET_ONE).padStart(2, "0"); // 2-digit month
+  const day = String(now.getDate()).padStart(2, "0"); // 2-digit day
+  return `${year}-${month}-${day}`; // ISO formatted date
+} // ends getTodayIsoDate
+
+// Intent: Compute the day immediately following a given YYYY-MM-DD date string
+function getDayAfterIsoDate(isoDate: string): string { // helper to derive day after start date
+  const dateObj = new Date(`${isoDate}T00:00:00Z`); // UTC date instance
+  dateObj.setUTCDate(dateObj.getUTCDate() + SINGLE_DAY_INCREMENT); // advance by one calendar day
+  return dateObj.toISOString().slice(0, 10); // return YYYY-MM-DD slice
+} // ends getDayAfterIsoDate
 
 // Intent: Render customizable travel request form with validation against Zod schema and inline errors
-export function TripForm({ presetTrip }: TripFormProps): JSX.Element { // exports TripForm component
+export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Element { // exports TripForm component
   // Extract agent start action and status from run context
   const { start, state } = useRun(); // retrieves active planning state and start function
 
@@ -118,6 +140,40 @@ export function TripForm({ presetTrip }: TripFormProps): JSX.Element { // export
     }; // ends cleanup
   }, []); // mounts once
 
+  // Handler for start date changes with real-time friendly inline validation
+  const handleStartDateChange = (newStart: string) => { // change callback
+    setStartDate(newStart); // updates start date state
+    const today = getTodayIsoDate(); // gets today's date
+    setErrors((prev) => { // updates error dictionary
+      const updated = { ...prev }; // clones previous errors
+      if (newStart && newStart < today) { // start date before today check
+        updated["startDate"] = "Start date must be today or later"; // friendly inline error
+      } else { // valid start date
+        delete updated["startDate"]; // clears start date error
+      } // ends start check
+      if (newStart && endDate && endDate <= newStart) { // end date order check
+        updated["endDate"] = "End date must be after start date"; // friendly inline error
+      } else if (newStart && endDate && endDate > newStart) { // valid order check
+        delete updated["endDate"]; // clears end date error
+      } // ends end date check
+      return updated; // returns updated errors
+    }); // ends setErrors
+  }; // ends handleStartDateChange
+
+  // Handler for end date changes with real-time friendly inline validation
+  const handleEndDateChange = (newEnd: string) => { // change callback
+    setEndDate(newEnd); // updates end date state
+    setErrors((prev) => { // updates error dictionary
+      const updated = { ...prev }; // clones previous errors
+      if (startDate && newEnd && newEnd <= startDate) { // end date order check
+        updated["endDate"] = "End date must be after start date"; // friendly inline error
+      } else { // valid end date
+        delete updated["endDate"]; // clears end date error
+      } // ends end date check
+      return updated; // returns updated errors
+    }); // ends setErrors
+  }; // ends handleEndDateChange
+
   // Handle form submission and validation
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => { // async submit event handler
     // Prevent default browser form submission
@@ -148,29 +204,51 @@ export function TripForm({ presetTrip }: TripFormProps): JSX.Element { // export
       }, // closes accessibility
     }; // closes candidateTrip
 
+    // Dictionary to accumulate field errors
+    const fieldErrors: Record<string, string> = {}; // empty errors map
+    const today = getTodayIsoDate(); // current calendar date
+
+    // Validate start date is today or later
+    if (!startDate.trim()) { // missing start date check
+      fieldErrors["startDate"] = "Start date is required"; // required error
+    } else if (startDate.trim() < today) { // start date past check
+      fieldErrors["startDate"] = "Start date must be today or later"; // friendly inline error
+    } // ends start date check
+
+    // Validate end date is strictly after start date
+    if (!endDate.trim()) { // missing end date check
+      fieldErrors["endDate"] = "End date is required"; // required error
+    } else if (startDate.trim() && endDate.trim() <= startDate.trim()) { // end date order check
+      fieldErrors["endDate"] = "End date must be after start date"; // friendly inline error
+    } // ends end date check
+
     // Validate candidate object against strict Zod TripRequest schema
     const validationResult = TripRequest.safeParse(candidateTrip); // performs runtime validation
 
-    // Handle validation failure
+    // Handle validation failure from Zod issues
     if (!validationResult.success) { // checks if validation failed
-      // Dictionary to accumulate field errors
-      const fieldErrors: Record<string, string> = {}; // empty errors map
-      // Iterate through each validation issue
       for (const issue of validationResult.error.issues) { // loops through Zod issues
-        // Join path elements with dot notation
         const pathKey = issue.path.join("."); // constructs field key e.g. 'budget.amountMinor'
-        // Assign first error message encountered for this path
         if (!fieldErrors[pathKey]) { // checks if key is already recorded
           fieldErrors[pathKey] = issue.message; // records issue message
         } // ends assignment
       } // ends issue loop
-      // Update errors state to show inline feedback
+    } // ends Zod validation check
+
+    // Abort submission if any date or schema validation errors exist
+    if (Object.keys(fieldErrors).length > 0) { // check errors length
       setErrors(fieldErrors); // updates errors state
       return; // aborts submit
     } // ends failure handling
 
     // Clear any previous error messages on successful validation
+    if (!validationResult.success) return; // safety guard
     setErrors({}); // resets errors
+
+    // Notify parent to auto-scroll to live timeline and switch mobile tab
+    if (onPlanStarted) { // checks if callback is passed
+      onPlanStarted(); // triggers tab switch and auto-scroll
+    } // ends callback check
 
     // Start live planning run with validated trip request
     await start({ // calls run provider start method
@@ -252,8 +330,9 @@ export function TripForm({ presetTrip }: TripFormProps): JSX.Element { // export
           <input // date input
             id="trip-start-date" // unique id for label pairing
             type="date" // native date picker
+            min={getTodayIsoDate()} // minimum date is today or later
             value={startDate} // controlled ISO string value
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setStartDate(e.target.value)} // change handler
+            onChange={(e: ChangeEvent<HTMLInputElement>) => handleStartDateChange(e.target.value)} // change handler with validation
             disabled={isBusy} // disabled state
             className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-sand/40 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake transition-colors" // input styling
           /> {/* closes input */}
@@ -270,8 +349,9 @@ export function TripForm({ presetTrip }: TripFormProps): JSX.Element { // export
           <input // date input
             id="trip-end-date" // unique id for label pairing
             type="date" // native date picker
+            min={startDate ? getDayAfterIsoDate(startDate) : getTodayIsoDate()} // minimum date strictly after start date
             value={endDate} // controlled ISO string value
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setEndDate(e.target.value)} // change handler
+            onChange={(e: ChangeEvent<HTMLInputElement>) => handleEndDateChange(e.target.value)} // change handler with validation
             disabled={isBusy} // disabled state
             className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-sand/40 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake transition-colors" // input styling
           /> {/* closes input */}

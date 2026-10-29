@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { money, provenanceLabel, shortModelName } from "../src/lib/format.js";
+import { formatPlannerDayNumbers, money, provenanceLabel, shortModelName } from "../src/lib/format.js";
 
 describe("UI formatting", () => {
   it("formats minor units with the currency's decimals", () => {
@@ -11,4 +11,14 @@ describe("UI formatting", () => {
     expect(shortModelName("rules-engine")).toBe("Rules engine");
     expect(provenanceLabel({ amountMinor: 1, currency: "USD", provenance: "estimate" })).toBe("Estimated");
   });
+  it("shifts 0-indexed Planner day numbers to 1-indexed (Day 1 to Day 4)", () => {
+    const rawPlannerText = "Day 0 offers a relaxed lakeside walk. Day 1 focuses on City Palace. Day 2 provides ropeway. Day 3 explores crafts.";
+    const expected = "Day 1 offers a relaxed lakeside walk. Day 2 focuses on City Palace. Day 3 provides ropeway. Day 4 explores crafts.";
+    expect(formatPlannerDayNumbers(rawPlannerText)).toBe(expected);
+
+    expect(formatPlannerDayNumbers("Planning Day 0 to Day 3 in Udaipur")).toBe("Planning Day 1 to Day 4 in Udaipur");
+    expect(formatPlannerDayNumbers("Reduce walking distance on Day 0")).toBe("Reduce walking distance on Day 1");
+    expect(formatPlannerDayNumbers("Day 1 to Day 4 already 1-indexed")).toBe("Day 1 to Day 4 already 1-indexed");
+  });
 });
+

@@ -11,10 +11,12 @@ import { useRun } from "../state/RunProvider.js"; // global run context consumer
 export interface PresetCardProps { // props interface for PresetCard
   // Optional callback to notify parent components to populate form fields with preset
   onSelectPreset?: (trip: TripRequest) => void; // callback receiving generated TripRequest
+  // Optional callback invoked when planning starts to scroll timeline and switch tab
+  onPlanStarted?: () => void; // callback notifying parent of planning activation
 } // ends props interface
 
 // Intent: Render emotional hero preset card for Riya's gift with live and replay action buttons
-export function PresetCard({ onSelectPreset }: PresetCardProps): JSX.Element { // exports PresetCard component
+export function PresetCard({ onSelectPreset, onPlanStarted }: PresetCardProps): JSX.Element { // exports PresetCard component
   // Access agent start function and current run status from context
   const { start, state } = useRun(); // retrieves run actions and state
   // Track whether any recorded golden run is available for replay
@@ -47,8 +49,20 @@ export function PresetCard({ onSelectPreset }: PresetCardProps): JSX.Element { /
 
   // Helper function to trigger a run with Riya's preset and populate the form fields
   const handleSelectRun = async (mode: "live" | "replay") => { // click handler for live or replay actions
-    // Generate fresh Riya preset object based on current calendar date
-    const trip = riyaPreset(); // builds TripRequest with 10-day forecast offset
+    // Default trip object based on current calendar date
+    let trip = riyaPreset(); // builds TripRequest with 10-day forecast offset
+    // For replay mode, ensure trip form matches the recorded run's exact details
+    if (mode === "replay") { // checks if replay mode selected
+      try { // try dynamically loading golden run
+        const replayMod = await import("../../replay/index.js"); // loads replay index module
+        const golden = replayMod.goldenFor("riya"); // finds golden run by id
+        if (golden && golden.request) { // validates presence of golden request
+          trip = golden.request; // uses exact recorded trip request
+        } // ends validation
+      } catch { // fallback gracefully if import fails
+        // trip remains riyaPreset() fallback
+      } // ends try-catch
+    } // ends replay mode check
     // Dispatch custom browser event so any listening form instance updates its inputs
     const PRESET_EVENT_NAME = "tv:preset"; // standard event name for preset synchronization
     window.dispatchEvent(new CustomEvent(PRESET_EVENT_NAME, { detail: trip })); // broadcasts trip to form
@@ -56,6 +70,10 @@ export function PresetCard({ onSelectPreset }: PresetCardProps): JSX.Element { /
     if (onSelectPreset) { // checks if callback is passed
       onSelectPreset(trip); // notifies parent container
     } // ends callback invocation
+    // Notify parent that planning run has started to switch tab and scroll
+    if (onPlanStarted) { // checks if callback is provided
+      onPlanStarted(); // triggers tab switch and auto-scroll
+    } // ends callback check
     // Start the agent run via shared context
     await start({ // calls start function
       trip, // trip payload

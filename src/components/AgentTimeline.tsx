@@ -1,7 +1,7 @@
 // Import React hooks, references, and JSX types
 import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from "react"; // React core primitives
 // Import formatting helpers for currency, model name, agent names, and rule identifiers
-import { AGENT_LABEL, RULE_SHORT, money, shortModelName } from "../lib/format.js"; // shared display formatters
+import { AGENT_LABEL, RULE_SHORT, formatPlannerDayNumbers, money, shortModelName } from "../lib/format.js"; // shared display formatters
 // Import useRun hook to read events and itinerary state
 import { useRun } from "../state/RunProvider.js"; // global agent state provider hook
 // Import shared types for AgentName, Directive, FinalItinerary, and ToolName
@@ -161,26 +161,53 @@ function resolveDirectiveText(directive: Directive, draft: FinalItinerary | null
   // Format directive according to operation type
   switch (directive.op) { // switch on operation discriminant
     case "drop_place": // handle drop_place
-      return `Drop ${resolvePlaceName(directive.placeId)}: ${directive.reason}`; // formatted string
+      return formatPlannerDayNumbers(`Drop ${resolvePlaceName(directive.placeId)}: ${directive.reason}`); // formatted string with 1-based days
     case "swap_place": // handle swap_place
-      return `Swap ${resolvePlaceName(directive.placeId)} → ${resolvePlaceName(directive.replacementId)}: ${directive.reason}`; // formatted string
+      return formatPlannerDayNumbers(`Swap ${resolvePlaceName(directive.placeId)} → ${resolvePlaceName(directive.replacementId)}: ${directive.reason}`); // formatted string with 1-based days
     case "change_lodging": // handle change_lodging
-      return `Change hotel to ${resolveLodgingName(directive.lodgingId)}: ${directive.reason}`; // formatted string
+      return formatPlannerDayNumbers(`Change hotel to ${resolveLodgingName(directive.lodgingId)}: ${directive.reason}`); // formatted string with 1-based days
     case "change_meal_tier": // handle change_meal_tier
-      return `Change meals to ${directive.mealTier} tier: ${directive.reason}`; // formatted string
+      return formatPlannerDayNumbers(`Change meals to ${directive.mealTier} tier: ${directive.reason}`); // formatted string with 1-based days
     case "move_place": // handle move_place
-      return `Move ${resolvePlaceName(directive.placeId)} to Day ${directive.toDayIndex + SINGLE_ITEM_COUNT}: ${directive.reason}`; // formatted string
+      return formatPlannerDayNumbers(`Move ${resolvePlaceName(directive.placeId)} to Day ${directive.toDayIndex + SINGLE_ITEM_COUNT}: ${directive.reason}`); // formatted string with 1-based days
   } // ends switch
 } // ends resolveDirectiveText
 
+// Props interface for AgentTimeline component
+export interface AgentTimelineProps { // props specification
+  // Optional callback handler to open evidence drawer for a given place or hotel ID
+  onOpenEvidence?: (placeId: string) => void; // callback handler
+} // ends AgentTimelineProps interface
+
 // Intent: Render AgentTimeline tracking live multi-agent events with auto-scroll and detailed mapping
-export function AgentTimeline(): JSX.Element { // exports AgentTimeline component
+export function AgentTimeline({ onOpenEvidence }: AgentTimelineProps = {}): JSX.Element { // exports AgentTimeline component
   // Access agent run state from context
   const { state } = useRun(); // reads state including events and active draft
   // Reference to the scrollable container element for managing scroll position
   const scrollContainerRef = useRef<HTMLDivElement | null>(null); // DOM ref to scrollable div
   // State tracking whether the user has scrolled up away from the bottom
   const [hasScrolledUp, setHasScrolledUp] = useState<boolean>(false); // tracks user scroll state
+
+  // Memoize search for the first drafted or finalized stop that contains accessibility evidence
+  const firstStopWithEvidence = useMemo(() => { // searches for stop with evidence
+    const it = state.final ?? state.draft; // resolves active itinerary
+    if (!it) { // guard against missing itinerary
+      return null; // returns null when no draft exists
+    } // ends null check
+    // Search visit stops across all scheduled days
+    for (const day of it.days) { // iterate through days
+      for (const item of day.items) { // iterate through items in day
+        if (item.kind === "visit" && item.evidence && item.evidence.length > EMPTY_COLLECTION_LENGTH) { // check visit evidence
+          return { id: item.placeId, name: item.name }; // returns first stop matching criteria
+        } // ends evidence check
+      } // ends items loop
+    } // ends days loop
+    // Fall back to checking lodging evidence if visits have no evidence
+    if (it.lodging.evidence && it.lodging.evidence.length > EMPTY_COLLECTION_LENGTH) { // check hotel evidence
+      return { id: it.lodging.id, name: it.lodging.name }; // returns hotel matching criteria
+    } // ends lodging check
+    return null; // no evidence found
+  }, [state.final, state.draft]); // recomputes when draft or final updates
 
   // Process raw SSE events into presentation rows, combining tool calls and results
   const timelineRows = useMemo<TimelineRowItem[]>(() => { // memoized row builder
@@ -198,7 +225,7 @@ export function AgentTimeline(): JSX.Element { // exports AgentTimeline componen
           t: event.t, // timestamp
           agent: event.agent, // thinking agent
           tone: "default", // neutral tone
-          mainText: event.text, // thought text
+          mainText: formatPlannerDayNumbers(event.text), // thought text formatted to 1-based days
         }); // ends push
       } else if (event.type === "llm_call") { // checks for llm_call event
         // Format model execution details
@@ -239,8 +266,21 @@ export function AgentTimeline(): JSX.Element { // exports AgentTimeline componen
         const toolLabel = TOOL_DISPLAY_NAMES[event.tool] ?? event.tool; // tool label
         // Format cached label suffix
         const cachedSuffix = event.cached ? " (cached)" : ""; // cached indicator
-        // Format result text combining tool label and summary
-        const resultSummaryText = `${toolLabel}: ${event.summary}${cachedSuffix}`; // formatted summary
+        // Detect tool timeout conditions (e.g. Overpass server timeout, TOOL_TIMEOUT, timed out)
+        const isTimeout = !event.ok && (/timeout|timed out/i.test(event.summary) || /timeout/i.test(event.tool)); // detects timeout
+        // Derive destination city name for calm fallback message
+        const cityName = state.final?.request.destination || state.draft?.request.destination || "Udaipur"; // destination city name
+        // Determine tone: calm amber marigold for timeouts, bad red for other failures, default for success
+        let resultTone: "default" | "bad" | "marigold" = event.ok ? "default" : "bad"; // initial tone
+        let resultText = `${toolLabel}: ${event.summary}${cachedSuffix}`; // default result summary text
+        if (isTimeout) { // check if failure was a timeout
+          resultTone = "marigold"; // calm amber note
+          if (event.tool === "overpass.query" || event.tool === "nominatim.search") { // map/search tool check
+            resultText = `Map search was slow, so we’re using verified ${cityName} data instead`; // calm friendly message
+          } else { // other tool timeout
+            resultText = `${toolLabel} search was slow, so we’re using verified ${cityName} data instead`; // calm friendly fallback
+          } // ends tool type check
+        } // ends timeout check
         // Check if matching tool_call row exists in our array
         const existingRowIndex = toolCallIndexMap.get(event.callId); // reads index
         if (existingRowIndex !== undefined && rows[existingRowIndex]) { // verifies existing row
@@ -249,17 +289,17 @@ export function AgentTimeline(): JSX.Element { // exports AgentTimeline componen
             ...rows[existingRowIndex], // preserves ID and agent
             t: event.t, // update timestamp to result arrival
             isLoading: false, // stops spinner
-            tone: event.ok ? "default" : "bad", // red if failed
-            mainText: resultSummaryText, // full summary text
+            tone: resultTone, // calm amber if timeout, red if failed, default if ok
+            mainText: resultText, // result text or calm fallback
           }; // ends assignment
         } else { // standalone result
           rows.push({ // append standalone result row
             id: `tool_res_${event.seq}`, // unique DOM id
             t: event.t, // result timestamp
             agent: event.agent, // calling agent
-            tone: event.ok ? "default" : "bad", // red if failed
+            tone: resultTone, // calm amber if timeout, red if failed, default if ok
             isLoading: false, // not loading
-            mainText: resultSummaryText, // full summary text
+            mainText: resultText, // result text or calm fallback
           }); // ends push
         } // ends existing row check
       } else if (event.type === "rule_check") { // checks for rule_check event
@@ -273,7 +313,7 @@ export function AgentTimeline(): JSX.Element { // exports AgentTimeline componen
           t: event.t, // flag timestamp
           agent: "critic", // critic agent
           tone: "bad", // red bad styling
-          mainText: `${event.violation.ruleId} ${ruleName}: ${event.violation.message}`, // violation message
+          mainText: formatPlannerDayNumbers(`${event.violation.ruleId} ${ruleName}: ${event.violation.message}`), // violation message with 1-based days
         }); // ends push
       } else if (event.type === "replan") { // checks for replan event
         // Count directives present in replan event
@@ -369,7 +409,7 @@ export function AgentTimeline(): JSX.Element { // exports AgentTimeline componen
     } // ends for loop
 
     return rows; // returns calculated array of timeline rows
-  }, [state.events, state.draft]); // recomputes whenever events or draft update
+  }, [state.events, state.draft, state.final]); // recomputes whenever events, draft, or final update
 
   // Scroll detection handler to determine if user has scrolled away from the bottom
   const handleScroll = () => { // scroll callback
@@ -421,7 +461,7 @@ export function AgentTimeline(): JSX.Element { // exports AgentTimeline componen
 
   // Render active scrollable timeline with ARIA log role
   return ( // returns active timeline JSX
-    <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-3 relative"> {/* card container */}
+    <div id="live-timeline" className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-3 relative"> {/* card container */}
       <div className="flex items-center justify-between border-b border-line pb-3"> {/* header row */}
         <div className="flex items-center gap-2"> {/* title group */}
           <h3 className="text-sm font-semibold text-ink uppercase tracking-wider font-display"> {/* title */}
@@ -497,6 +537,20 @@ export function AgentTimeline(): JSX.Element { // exports AgentTimeline componen
                     </div> // closes subtext container
                   )} {/* ends subtext check */}
                   {row.details} {/* optional expandable details */}
+                  {/* View evidence link for accessibility_proof rows */}
+                  {row.agent === "accessibility_proof" && onOpenEvidence && firstStopWithEvidence && ( // accessibility proof link condition
+                    <div className="mt-1.5 pt-1.5 border-t border-line/40"> {/* link container */}
+                      <button // interactive link button to open evidence drawer
+                        type="button" // button type
+                        onClick={() => onOpenEvidence(firstStopWithEvidence.id)} // opens drawer with target stop
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-lake hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-lake" // accessible link styling
+                        aria-label={`View evidence for ${firstStopWithEvidence.name}`} // accessible label
+                      > {/* button label */}
+                        <span>View evidence</span> {/* link text */}
+                        <span aria-hidden="true">→</span> {/* arrow indicator */}
+                      </button> {/* closes button */}
+                    </div> // closes link container
+                  )} {/* ends accessibility_proof link check */}
                 </div> {/* closes content column */}
               </div> {/* closes row flex layout */}
             </div> // closes row card
