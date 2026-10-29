@@ -10,6 +10,8 @@ import { AgentTimeline } from "../components/AgentTimeline.js"; // streaming log
 import { BudgetMeter } from "../components/BudgetMeter.js"; // accessible animated cost meter
 // Import RuleGrid component to display R0-R8 rule check chips
 import { RuleGrid } from "../components/RuleGrid.js"; // hero verification grid for validation rules
+// Import ItineraryView component to display finalized or draft itinerary
+import { ItineraryView } from "../components/ItineraryView.js"; // comprehensive itinerary, cost breakdown, and checks view
 // Import TripRequest type for sharing preset values between PresetCard and TripForm
 import type { TripRequest } from "../../types/travelverse.js"; // shared trip contract type
 
@@ -152,32 +154,8 @@ export function PlannerPage(): JSX.Element { // exports PlannerPage component
 
         {/* Right Column (Desktop flexible remaining width): Itinerary above Map */}
         <div className={`w-full flex-1 space-y-6 ${activeTab === "map" ? "block" : "hidden lg:block"}`}> {/* right column responsive visibility */}
-          {/* Itinerary Section: placeholder for P13 */}
-          <div // itinerary card wrapper
-            className="bg-card border border-line rounded-2xl p-6 shadow-sm space-y-3" // card styling
-          > {/* itinerary card contents */}
-            <div className="flex items-center justify-between border-b border-line pb-3"> {/* header row */}
-              <div> {/* title group */}
-                <h3 className="text-base font-semibold text-ink font-display"> {/* title */}
-                  Itinerary {/* heading text */}
-                </h3> {/* closes heading */}
-                <p className="text-xs text-ink-soft mt-0.5"> {/* description */}
-                  Curated days with proven accessibility and deterministic cost breakdown {/* explanation */}
-                </p> {/* closes description */}
-              </div> {/* closes title group */}
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-sand text-ink-soft border border-line"> {/* badge */}
-                P13 {/* milestone indicator */}
-              </span> {/* closes badge */}
-            </div> {/* closes header row */}
-            <div className="py-12 flex flex-col items-center justify-center text-center text-ink-soft space-y-2 border border-dashed border-line rounded-xl bg-sand/30"> {/* placeholder box */}
-              <p className="text-sm font-medium text-ink"> {/* placeholder title */}
-                Itinerary preview coming in P13 {/* placeholder text */}
-              </p> {/* closes title */}
-              <p className="text-xs max-w-sm"> {/* placeholder description */}
-                Once planning starts, your day-by-day plan with verified step-free venues and hotel stays will render here. {/* placeholder details */}
-              </p> {/* closes description */}
-            </div> {/* closes placeholder box */}
-          </div> {/* closes itinerary card */}
+          {/* Itinerary Section: displays working draft or finalized itinerary with costs and checks */}
+          <ItineraryView /> {/* renders comprehensive day-by-day itinerary and checks */}
 
           {/* Map Section: Visible on desktop and on mobile 'map' tab, placeholder for P14 */}
           <div // map panel wrapper
