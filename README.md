@@ -29,7 +29,7 @@ flowchart TD
     Specialists --> Planner[Master Planner\nNemotron-3 Super 120B / Ultra 550B]
     Planner --> Enforce[Deterministic Budget & Cadence Enforcement\nserver/engine/schedule.ts]
     Enforce --> Proof[Tavily Proof Engine: Live Web Accessibility Extraction\nTavily Extract + Nano 30B Judge]
-    Proof --> Build[Deterministic Itinerary Builder\nserver/engine/buildItinerary.ts]
+    Proof --> Build[Deterministic Itinerary Builder\nserver/engine/build.ts]
     Build --> Rules{Rules Check R0-R8\nPure Deterministic Verification}
     Rules -- "Violations Found (Rounds 1-3)" --> Critic[Critic Agent: Violation Diagnostics\nNemotron-3 Super 120B / Ultra 550B]
     Critic --> Planner
@@ -44,19 +44,19 @@ flowchart TD
    Language models output **only** semantic IDs, enums, short rationale text, and range-checked decision indices. Every single monetary price, travel arrival time, walking distance, currency exchange, budget total, and pass/fail constraint is computed deterministically in `server/engine/*`. Never does an LLM hallucinate or compute money or physics.
 2. **Rules R0–R8 (The Deterministic Guardrails):**  
    Nine deterministic checks run in zero milliseconds to validate every itinerary draft:
-   - **R0 (Dates & Pace):** Non-overlapping chronological events, reasonable stops per day.
-   - **R1 (Budget Ceiling):** Total integer minor units (cents) must stay within user budget.
-   - **R2 (Transit Feasibility):** Real OSRM driving and walking times between coordinates.
-   - **R3 (Mobility & Step-Free):** Zero stairs, verified ramps/elevators when mobility constraint is active.
-   - **R4 (Opening Hours & Closures):** Respects venue hours, avoids closed days.
-   - **R5 (Rest & Meal Rhythm):** Paces breakfast, lunch, dinner, and adequate rest buffers.
-   - **R6 (Lodging Continuity):** One lodging base per city leg, avoiding unnecessary room changes.
-   - **R7 (Geo-Clustering):** Groups nearby attractions to prevent criss-crossing the city.
-   - **R8 (Weather Suitability):** Routes indoor venues during heavy rain or excessive midday heat.
+   - **R0 Data:** All activity IDs are valid, duplicate stops are removed, no days are empty, and costs have verified provenance.
+   - **R1 Budget:** Total integer cost in minor units (cents/paise) must not exceed the user's budget ceiling.
+   - **R2 Hours:** Every stop is open during its scheduled visit window on that day of the week, with no active closure advisories.
+   - **R3 Walking:** Daily walking distance stays within the traveler's mobility limit or pace default threshold.
+   - **R4 Transit:** Daily transit travel time stays within the allowable pace limit.
+   - **R5 Weather:** Checks forecast for rain probability (≥40%) or midday heat (≥34°C) during outdoor visits.
+   - **R6 Step-free:** Lodging and all scheduled stops must have verified step-free access when mobility constraints are required.
+   - **R7 Day length:** Daily stop count stays within pace limits and activities end before the evening cutoff.
+   - **R8 Rest:** Ensures regular rest breaks between activity blocks on relaxed or step-free trips.
 3. **Critic + Enforcement Loop:**  
    When a rule is violated (e.g. City Palace has steep stairs), the deterministic engine first attempts direct mathematical repair (`repairToFit`). If unresolvable, the **Critic Agent** pinpoints the exact failure, builds structured repair feedback, and passes it to the **Planner** for an intelligent re-plan (bounded to max 3 re-plans, escalating to Nemotron Ultra on round 3).
 4. **Tavily Proof Engine:**  
-   Autonomous accessibility verification combines Tavily Search and Extract to pull live official venue markdown, submits it to a Nemotron Nano judge, and cryptographically checks verbatim quotes (`verifyVerbatimQuote`) so users see indisputable proof of ramp or elevator access.
+   Autonomous accessibility verification combines Tavily Search and Extract to pull live official venue markdown, submits it to a Nemotron Nano judge, and performs exact-text quote verification: the quote must appear on the fetched official page (`verifyVerbatimQuote`) so users see indisputable proof of ramp or elevator access.
 5. **Human-in-the-Loop Trade-Off:**  
    When constraints are mathematically incompatible (e.g., $150 budget for 4 days in a heritage destination), TravelVerse refuses to fake numbers. It halts the stream and presents explicit trade-off choices with transparent impact deltas.
 
@@ -100,7 +100,7 @@ TravelVerse integrates Tavily for live grounding and verifiable physical accessi
 - **Tavily Search:** Real-time discovery of city-wide festivals, holiday venue closures, and sudden weather alerts.
 - **Tavily Extract (Accessibility Proof Engine):**  
   Pulls raw DOM/markdown from venue official domains (e.g., City Palace, Jagmandir, Saheliyon Ki Bari) to verify wheelchair ramps, elevators, and step-free entrances.
-- **Credit Footprint:** ~2 Tavily requests (1 search + 1 extract) per standard plan, strictly bounded by a cap of **8 Tavily credits per run** in `RunBudget`.
+- **Credit Footprint:** ~2 Tavily requests (1 search + 1 extract) per standard plan, strictly bounded by a cap of **10 Tavily credits per run** in `RunBudget`.
 
 ---
 
@@ -109,9 +109,9 @@ TravelVerse integrates Tavily for live grounding and verifiable physical accessi
 - **Deterministic Hard Caps (`RunBudget`):**  
   Every execution is bounded by immutable resource caps:
   - Max **3 re-plans**
-  - Max **10 LLM calls**
-  - Max **8 tool calls**
-  - Max **60,000 tokens**
+  - Max **16 LLM calls**
+  - Max **20 tool calls** (max 8 tool calls per agent)
+  - Max **160,000 tokens**
   - Max **$0.10 USD spend** per plan
   - **240-second wall-clock deadline**
   - Rate limiting: **6 runs per IP per hour**
@@ -127,7 +127,7 @@ TravelVerse integrates Tavily for live grounding and verifiable physical accessi
 - **Zero Browser Secrets:**  
   No secrets exist in the client. Strict pre-commit and CI scans (`scripts/check-secrets.mjs`) prevent accidental leaks.
 - **Test Suite & Evaluation:**  
-  - **65 passing automated tests** across 9 test suites (`engine`, `safety`, `rules`, `orchestrator`, `llm`, `udaipur`, `proof-and-client`, etc.).
+  - **65 passing automated tests** across 9 test suites (`engine`, `safety`, `orchestrator`, `llm`, `udaipur`, `udaipur-places`, `proof-and-client`, `format`, `accessibility-ui`).
   - Mini-eval across 10 adversarial scenarios: 0 crashes, 0 unhandled exceptions.
 
 ---

@@ -74,17 +74,17 @@ TravelVerse operates on a core architectural maxim: **"LLM decides, code compute
 1. **Specialist Swarm (Nemotron-3 Nano 30B):** Four lightweight agents analyze the prompt in parallel, synthesizing traveler mood, seasonal weather from Open-Meteo, curated city pack locations, and fiscal bounds.
 2. **Strategic Planner (Nemotron-3 Super 120B):** Assembles a coherent draft in JSON mode, specifying places, meal types, and transit choices.
 3. **Deterministic Rules Engine (R0–R8):** Validates every constraint mathematically in zero milliseconds:
-   - **R0 (Dates & Pace):** Non-overlapping sequence, realistic day density.
-   - **R1 (Budget Ceiling):** Total integer cents <= user budget.
-   - **R2 (Transit Feasibility):** Accurate OSRM driving and walking time.
-   - **R3 (Mobility & Step-Free):** Zero stairs, verified ramps/elevators.
-   - **R4 (Opening Hours & Closures):** Checks live times and holiday closures.
-   - **R5 (Rest & Meal Rhythm):** Mandates timely lunch/dinner pacing.
-   - **R6 (Lodging Continuity):** No mid-trip hotel displacement without cause.
-   - **R7 (Geo-Clustering):** Avoids criss-crossing the city multiple times daily.
-   - **R8 (Weather Suitability):** Routes indoor visits during heavy rain or mid-day heat.
+   - **R0 Data:** All activity IDs are valid, duplicate stops are removed, no days are empty, and costs have verified provenance.
+   - **R1 Budget:** Total integer cost in minor units (cents/paise) must not exceed the user's budget ceiling.
+   - **R2 Hours:** Every stop is open during its scheduled visit window on that day of the week, with no active closure advisories.
+   - **R3 Walking:** Daily walking distance stays within the traveler's mobility limit or pace default threshold.
+   - **R4 Transit:** Daily transit travel time stays within the allowable pace limit.
+   - **R5 Weather:** Checks forecast for rain probability (≥40%) or midday heat (≥34°C) during outdoor visits.
+   - **R6 Step-free:** Lodging and all scheduled stops must have verified step-free access when mobility constraints are required.
+   - **R7 Day length:** Daily stop count stays within pace limits and activities end before the evening cutoff.
+   - **R8 Rest:** Ensures regular rest breaks between activity blocks on relaxed or step-free trips.
 4. **Critic & Repair:** When rules fail (e.g., City Palace has steep stairs), the engine first attempts mathematical repair (`repairToFit`). If structural re-planning is required, the Critic constructs structured feedback and triggers a re-plan. If a round reaches escalation, it upgrades to Nemotron-3 Ultra 550B.
-5. **Accessibility Proof Engine (Tavily Extract + Nemotron Nano):** Fetches official venue pages, extracts accessibility statements, passes them through a Nano 30B judge, and cryptographically checks verbatim quotes against the source markdown.
+5. **Accessibility Proof Engine (Tavily Extract + Nemotron Nano):** Fetches official venue pages, extracts accessibility statements, passes them through a Nano 30B judge, and performs exact-text quote verification: the quote must appear on the fetched official page.
 6. **Human-in-the-Loop Trade-Off:** If a budget is mathematically impossible ($150 for 4 days in a luxury destination), TravelVerse does not hallucinate fake prices; it pauses the SSE stream and asks the user to choose between explicit options (e.g., shorten trip or increase budget).
 
 ---
@@ -107,7 +107,7 @@ We deployed a tiered model hierarchy on Nebius Token Factory:
 
 - **65 Passing Automated Tests:** Vitest suites covering the deterministic engine, R0–R8 rules, LLM fallback ladder, security sanitization, and UI state reducer.
 - **Zero Secret Leaks:** Built-in pre-commit and CI scanner (`scripts/check-secrets.mjs`) guarantees no API keys or tokens are ever packaged in client bundles or committed to git.
-- **Deterministic Bounds:** Every plan execution is capped at max 3 re-plans, 10 LLM calls, 8 tool calls, $0.10 USD spend, and a 240-second timeout.
+- **Deterministic Bounds:** Every plan execution is capped at max 3 re-plans, 16 LLM calls, 20 tool calls, 160,000 tokens, $0.10 USD spend, and a 240-second timeout.
 - **Prompt Injection Defense:** External search data and map strings are sanitized, scanned with regex heuristic filters, and encapsulated in untrusted XML wrappers before entering prompts.
 - **Control Room:** An administrative dashboard (`/control`) providing real-time telemetry on budget spend, breaker trips, model switches, and manual overrides.
 
