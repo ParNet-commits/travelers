@@ -32,3 +32,24 @@
   /* Sans-serif font for readable, modern interface typography */
   --font-sans: "Inter", system-ui, sans-serif;
 }
+
+/* Override default Leaflet divIcon square white background to render circular custom markers cleanly */
+.leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Ensure Leaflet popup container matches design system card border and rounded corners */
+.leaflet-popup-content-wrapper {
+  border-radius: 1rem !important;
+  box-shadow: 0 4px 14px rgba(28, 27, 26, 0.1) !important;
+  border: 1px solid #e7dfd3 !important;
+  background-color: #ffffff !important;
+}
+
+/* Set comfortable padding and line height for popup content */
+.leaflet-popup-content {
+  margin: 12px 14px !important;
+  line-height: 1.4 !important;
+}
+

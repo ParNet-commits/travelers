@@ -1,5 +1,5 @@
-// Import React hooks and keyboard event type definitions
-import { useRef, useState, type JSX, type KeyboardEvent } from "react"; // React hooks and event types
+// Import React core hooks, lazy loading utilities, and event types
+import { lazy, Suspense, useRef, useState, type JSX, type KeyboardEvent } from "react"; // React hooks, lazy/suspense, and event types
 // Import PresetCard component for Riya's gift story
 import { PresetCard } from "../components/PresetCard.js"; // featured story preset card
 // Import TripForm component for user trip input
@@ -14,6 +14,31 @@ import { RuleGrid } from "../components/RuleGrid.js"; // hero verification grid 
 import { ItineraryView } from "../components/ItineraryView.js"; // comprehensive itinerary, cost breakdown, and checks view
 // Import TripRequest type for sharing preset values between PresetCard and TripForm
 import type { TripRequest } from "../../types/travelverse.js"; // shared trip contract type
+
+// Lazy-load MapView component with Leaflet dependencies for code splitting and fast initial bundle
+const MapView = lazy(() => import("../components/MapView.js")); // dynamic MapView importer
+
+// Intent: Render loading skeleton placeholder matching MapView layout dimensions while bundle loads
+function MapSkeleton(): JSX.Element { // exports skeleton fallback component
+  // Render pulse card matching MapView height and card styling
+  return ( // returns skeleton JSX
+    <div className="bg-card border border-line rounded-2xl p-6 shadow-sm space-y-4 animate-pulse"> {/* card wrapper */}
+      <div className="flex items-center justify-between border-b border-line pb-3"> {/* header placeholder */}
+        <div className="space-y-2"> {/* text placeholder group */}
+          <div className="h-4 w-24 bg-sand rounded" /> {/* title bar */}
+          <div className="h-3 w-48 bg-sand/60 rounded" /> {/* subtitle bar */}
+        </div> {/* closes text group */}
+        <div className="h-6 w-20 bg-sand rounded-full" /> {/* badge placeholder */}
+      </div> {/* closes header */}
+      <div className="h-[60vh] lg:h-[420px] w-full rounded-2xl bg-sand/40 border border-line flex flex-col items-center justify-center text-ink-soft space-y-2"> {/* map box skeleton */}
+        <div className="w-8 h-8 rounded-full border-2 border-lake border-t-transparent animate-spin" /> {/* loading spinner */}
+        <span className="text-xs font-medium text-ink-soft"> {/* loading label */}
+          Loading map... {/* status text */}
+        </span> {/* closes label */}
+      </div> {/* closes map box */}
+    </div> // closes card wrapper
+  ); // ends return
+} // ends MapSkeleton
 
 // Define supported mobile tab identifiers
 type MobileTab = "plan" | "timeline" | "map"; // union of tab identifiers
@@ -157,35 +182,16 @@ export function PlannerPage(): JSX.Element { // exports PlannerPage component
           {/* Itinerary Section: displays working draft or finalized itinerary with costs and checks */}
           <ItineraryView /> {/* renders comprehensive day-by-day itinerary and checks */}
 
-          {/* Map Section: Visible on desktop and on mobile 'map' tab, placeholder for P14 */}
+          {/* Map Section: Visible on desktop and on mobile 'map' tab */}
           <div // map panel wrapper
             id="panel-map" // panel id matching tab aria-controls
             role="tabpanel" // ARIA tabpanel role
             aria-labelledby="tab-map" // associates with map tab
-            className="bg-card border border-line rounded-2xl p-6 shadow-sm space-y-3" // card styling
-          > {/* map card contents */}
-            <div className="flex items-center justify-between border-b border-line pb-3"> {/* header row */}
-              <div> {/* title group */}
-                <h3 className="text-base font-semibold text-ink font-display"> {/* title */}
-                  Map {/* heading text */}
-                </h3> {/* closes heading */}
-                <p className="text-xs text-ink-soft mt-0.5"> {/* description */}
-                  Visual route with OSRM transit calculations and terrain contours {/* explanation */}
-                </p> {/* closes description */}
-              </div> {/* closes title group */}
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-sand text-ink-soft border border-line"> {/* badge */}
-                P14 {/* milestone indicator */}
-              </span> {/* closes badge */}
-            </div> {/* closes header row */}
-            <div className="py-16 flex flex-col items-center justify-center text-center text-ink-soft space-y-2 border border-dashed border-line rounded-xl bg-sand/30"> {/* placeholder box */}
-              <p className="text-sm font-medium text-ink"> {/* placeholder title */}
-                Map visualization coming in P14 {/* placeholder text */}
-              </p> {/* closes title */}
-              <p className="text-xs max-w-sm"> {/* placeholder description */}
-                Venues, daily transit tracks, and step-free walking paths will be plotted on an interactive map. {/* placeholder details */}
-              </p> {/* closes description */}
-            </div> {/* closes placeholder box */}
-          </div> {/* closes map card */}
+          > {/* map panel contents */}
+            <Suspense fallback={<MapSkeleton />}> {/* lazy load boundary with pulse skeleton */}
+              <MapView /> {/* lazy-loaded interactive Leaflet map component */}
+            </Suspense> {/* closes Suspense */}
+          </div> {/* closes map panel */}
         </div> {/* closes right column */}
       </div> {/* closes main content layout */}
     </div> // closes page wrapper

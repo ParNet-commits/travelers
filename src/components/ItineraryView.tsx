@@ -593,10 +593,13 @@ function ChecksPanel({ // helper component for validation rules
                   <span className="font-semibold uppercase mr-1">[{warning.ruleId}]</span> {/* rule identifier */}
                   <span>{warning.message}</span> {/* warning message */}
                 </div> {/* closes message container */}
-              </div> // closes warning card
+                {/* closes warning card */}
+              </div>
             ))} {/* ends soft map */}
-          </div> // closes advisories list
-        </div> // closes soft warnings container
+            {/* closes advisories list */}
+          </div>
+          {/* closes soft warnings container */}
+        </div>
       ) : null} {/* ends soft condition */}
     </div> // closes panel card
   ); // ends return
