@@ -11,33 +11,8 @@ import { PlannerPage } from "./pages/PlannerPage.js"; // main travel planner vie
 // Import RunProvider to supply shared planning context to the application
 import { RunProvider } from "./state/RunProvider.js"; // context provider for agent run state
 
-// Intent: Render placeholder component for Control Room admin dashboard coming in milestone P17
-function ControlRoomPlaceholder(): JSX.Element { // helper component for /control route
-  // Render placeholder interface styled with warm cards and typography
-  return ( // returns placeholder JSX
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12"> {/* centered container */}
-      <div className="bg-card border border-line rounded-2xl p-8 shadow-sm space-y-4 text-center"> {/* card box */}
-        <span className="inline-flex items-center text-xs font-semibold tracking-wider uppercase text-marigold"> {/* milestone badge */}
-          Milestone P17 {/* milestone badge text */}
-        </span> {/* closes badge */}
-        <h2 className="text-2xl font-semibold text-ink font-display"> {/* title heading */}
-          Control Room - coming in P17 {/* heading text */}
-        </h2> {/* closes title */}
-        <p className="text-sm text-ink-soft max-w-md mx-auto leading-relaxed"> {/* description */}
-          Live model latency probes, Nebius token consumption, Tavily credit burn, and deep system diagnostics will be available here. {/* explanation text */}
-        </p> {/* closes description */}
-        <div className="pt-4"> {/* actions container */}
-          <a // return to planner navigation link
-            href="/" // link target
-            className="min-h-11 inline-flex items-center px-5 py-2.5 rounded-xl font-medium text-sm text-white bg-lake hover:bg-lake/90 shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake" // accessible button styling
-          > {/* link content */}
-            Back to Planner {/* link label */}
-          </a> {/* closes return link */}
-        </div> {/* closes actions */}
-      </div> {/* closes card box */}
-    </div> // closes container
-  ); // ends return
-} // ends ControlRoomPlaceholder
+// Import ControlRoom component for administrative dashboard
+import { ControlRoom } from "./pages/ControlRoom.js"; // administrative control room dashboard
 
 // Intent: Root application component providing routing between /control and / with RunProvider wrapper
 export default function App(): JSX.Element { // exports root App component
@@ -56,11 +31,28 @@ export default function App(): JSX.Element { // exports root App component
     const handlePopState = () => { // popstate event callback
       setPathname(window.location.pathname); // updates pathname state
     }; // ends handlePopState
+    // Intercept relative link clicks for client-side navigation without full reloads
+    const handleDocumentClick = (event: MouseEvent) => { // global click interceptor
+      const targetElement = event.target as HTMLElement | null; // target DOM node
+      const anchorElement = targetElement?.closest("a"); // finds closest anchor tag
+      if (!anchorElement) return; // ignore non-link clicks
+      const href = anchorElement.getAttribute("href"); // reads href attribute
+      if (href && href.startsWith("/") && !href.startsWith("//") && !anchorElement.target && !anchorElement.hasAttribute("download")) { // internal link check
+        event.preventDefault(); // prevents browser full page reload
+        if (href !== window.location.pathname) { // only update when path changes
+          window.history.pushState({}, "", href); // updates browser history
+          setPathname(href); // updates React pathname state
+        } // ends path check
+      } // ends internal link check
+    }; // ends handleDocumentClick
     // Subscribe to popstate event
     window.addEventListener("popstate", handlePopState); // registers listener
-    // Cleanup event listener when unmounting
+    // Subscribe to document click event for navigation interception
+    document.addEventListener("click", handleDocumentClick); // registers click listener
+    // Cleanup event listeners when unmounting
     return () => { // cleanup function
-      window.removeEventListener("popstate", handlePopState); // unregisters listener
+      window.removeEventListener("popstate", handlePopState); // unregisters popstate
+      document.removeEventListener("click", handleDocumentClick); // unregisters click listener
     }; // ends cleanup
   }, []); // runs once on mount
 
@@ -82,7 +74,7 @@ export default function App(): JSX.Element { // exports root App component
         {/* Main page content area */}
         <main className="flex-1"> {/* flex growing main container */}
           {isControlRoom ? ( // conditional rendering based on path
-            <ControlRoomPlaceholder /> // renders control room placeholder on /control
+            <ControlRoom /> // renders control room dashboard on /control
           ) : ( // default route
             <PlannerPage /> // renders main trip planner on all other routes
           )} {/* ends conditional */}

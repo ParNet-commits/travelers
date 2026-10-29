@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from "
 import { AGENT_LABEL, RULE_SHORT, formatPlannerDayNumbers, money, shortModelName } from "../lib/format.js"; // shared display formatters
 // Import useRun hook to read events and itinerary state
 import { useRun } from "../state/RunProvider.js"; // global agent state provider hook
-// Import shared types for AgentName, Directive, FinalItinerary, and ToolName
-import type { AgentName, Directive, FinalItinerary, ToolName } from "../../types/travelverse.js"; // domain contracts
+// Import shared types for AgentName, Directive, FinalItinerary, SSEEvent, and ToolName
+import type { AgentName, Directive, FinalItinerary, SSEEvent, ToolName } from "../../types/travelverse.js"; // domain contracts
 
 // Define named constant for milliseconds per second
 const MS_PER_SECOND = 1000; // factor to convert millisecond timestamps to seconds
@@ -209,6 +209,12 @@ export function AgentTimeline({ onOpenEvidence }: AgentTimelineProps = {}): JSX.
     return null; // no evidence found
   }, [state.final, state.draft]); // recomputes when draft or final updates
 
+  // Find run_started event if present in state to extract configured models for the header
+  const runStartedEvent = useMemo(() => { // memoizes lookup of run_started event
+    // Find first run_started event in recorded event stream
+    return state.events.find((event): event is Extract<SSEEvent, { type: "run_started" }> => event.type === "run_started") ?? null; // returns matching event or null
+  }, [state.events]); // recomputes when event stream changes
+
   // Process raw SSE events into presentation rows, combining tool calls and results
   const timelineRows = useMemo<TimelineRowItem[]>(() => { // memoized row builder
     // Initialize empty array of timeline rows
@@ -398,12 +404,14 @@ export function AgentTimeline({ onOpenEvidence }: AgentTimelineProps = {}): JSX.
           mainText: `Replay: ${event.reason}`, // replay reason
         }); // ends push
       } else if (event.type === "run_started") { // checks for run_started event
+        // Format concise model routing summary string
+        const modelSummary = `${shortModelName(event.models.planner)} / ${shortModelName(event.models.fast)} / ${shortModelName(event.models.escalation)}`; // summarizes models
         rows.push({ // append run_started row
           id: `start_${event.seq}`, // unique DOM id
           t: event.t, // start timestamp
           agent: "orchestrator", // orchestrator agent
           tone: "default", // neutral tone
-          mainText: `Planning started for ${event.destination} (${event.mode} mode)`, // start announcement
+          mainText: `Planning started for ${event.destination} (${event.mode} mode) · Models: ${modelSummary}`, // start announcement with models
         }); // ends push
       } // ends event type checks
     } // ends for loop
@@ -462,17 +470,31 @@ export function AgentTimeline({ onOpenEvidence }: AgentTimelineProps = {}): JSX.
   // Render active scrollable timeline with ARIA log role
   return ( // returns active timeline JSX
     <div id="live-timeline" className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-3 relative"> {/* card container */}
-      <div className="flex items-center justify-between border-b border-line pb-3"> {/* header row */}
-        <div className="flex items-center gap-2"> {/* title group */}
-          <h3 className="text-sm font-semibold text-ink uppercase tracking-wider font-display"> {/* title */}
-            Agent Timeline {/* heading text */}
-          </h3> {/* closes heading */}
-          <span className="w-2 h-2 rounded-full bg-ok animate-pulse" aria-hidden="true" /> {/* live stream pulse */}
-        </div> {/* closes title group */}
-        <span className="text-[11px] font-medium text-ink-soft"> {/* event counter */}
-          {timelineRows.length} event{timelineRows.length === SINGLE_ITEM_COUNT ? "" : "s"} {/* count */}
-        </span> {/* closes counter */}
-      </div> {/* closes header row */}
+      <div className="border-b border-line pb-3 space-y-2"> {/* header container */}
+        <div className="flex items-center justify-between gap-2"> {/* top title and counter row */}
+          <div className="flex items-center gap-2 shrink-0"> {/* title group */}
+            <h3 className="text-sm font-semibold text-ink uppercase tracking-wider font-display whitespace-nowrap"> {/* title */}
+              Agent Timeline {/* heading text */}
+            </h3> {/* closes heading */}
+            <span className="w-2 h-2 rounded-full bg-ok animate-pulse" aria-hidden="true" /> {/* live stream pulse */}
+          </div> {/* closes title group */}
+          <span className="text-[11px] font-medium text-ink-soft shrink-0"> {/* event counter */}
+            {timelineRows.length} event{timelineRows.length === SINGLE_ITEM_COUNT ? "" : "s"} {/* count */}
+          </span> {/* closes counter */}
+        </div> {/* closes top row */}
+        {runStartedEvent && ( // displays models from run_started event on their own line under title
+          <div className="overflow-x-auto py-0.5"> {/* horizontal scroll/fit container for models line */}
+            <div className="text-[11px] text-ink-soft bg-sand border border-line px-2 py-0.5 rounded-full inline-flex items-center gap-1.5 font-mono whitespace-nowrap"> {/* models badge */}
+              <span className="font-sans font-medium text-ink">Models:</span> {/* models label */}
+              <span>{shortModelName(runStartedEvent.models.planner)}</span> {/* planner model */}
+              <span className="text-ink-soft/40">/</span> {/* separator */}
+              <span>{shortModelName(runStartedEvent.models.fast)}</span> {/* fast model */}
+              <span className="text-ink-soft/40">/</span> {/* separator */}
+              <span>{shortModelName(runStartedEvent.models.escalation)}</span> {/* escalation model */}
+            </div> {/* closes models badge */}
+          </div> // closes models container
+        )} {/* ends runStartedEvent conditional */}
+      </div> {/* closes header container */}
 
       {/* Accessible scrollable log container */}
       <div // log container element

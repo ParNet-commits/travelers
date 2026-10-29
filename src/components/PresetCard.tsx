@@ -111,6 +111,7 @@ export function PresetCard({ onSelectPreset, onPlanStarted }: PresetCardProps): 
       <div className="mt-5 flex flex-col sm:flex-row gap-3"> {/* buttons flex layout */}
         {/* Primary live planning button */}
         <button // button element
+          id="btn-plan-live" // unique DOM id for testing
           type="button" // explicit button type
           onClick={() => handleSelectRun("live")} // triggers live agent planning
           disabled={isBusy} // disables while agent is processing
@@ -122,6 +123,7 @@ export function PresetCard({ onSelectPreset, onPlanStarted }: PresetCardProps): 
         {/* Secondary replay button, shown only when golden run exists */}
         {hasGoldenRun && ( // conditional render based on golden run availability
           <button // replay button element
+            id="btn-watch-replay" // unique DOM id for testing
             type="button" // explicit button type
             onClick={() => handleSelectRun("replay")} // triggers recorded replay
             disabled={isBusy} // disables while busy

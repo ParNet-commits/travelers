@@ -4,6 +4,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import type { PlanRequestBody } from "../../types/travelverse.js"; // shared contract for plan request payload
 // Import useAgentStream hook that manages SSE streaming and agent reducer state
 import { useAgentStream } from "../hooks/useAgentStream.js"; // hook managing agent lifecycle and SSE connection
+// Import admin settings helper function for route overrides
+import { getRouteOverride } from "../lib/adminSettings.js"; // reads stored route overrides
 // Import AgentState interface to describe current planning run state
 import type { AgentState } from "../lib/agentReducer.js"; // state machine interface for agent runs
 
@@ -35,19 +37,33 @@ export function RunProvider({ children }: { children: ReactNode }) { // exports 
   // Track the active itinerary day selected by the user for inspection
   const [selectedDay, setSelectedDay] = useState<number | null>(null); // stores active day index or null
 
+  // Wrap start function to ensure routeOverride from localStorage and admin credentials are included
+  const start = useMemo(() => { // memoizes start wrapper
+    // Return wrapped asynchronous start function
+    return async (body: PlanRequestBody): Promise<void> => { // typed start implementation
+      // Resolve route override from body or browser localStorage
+      const routeOverride = body.routeOverride !== undefined ? body.routeOverride : (getRouteOverride() ?? null); // retrieves override or null
+      // Delegate to underlying agent stream start with merged body
+      return agentStream.start({ // calls underlying hook start
+        ...body, // passes trip parameters and mode
+        routeOverride, // attaches route override
+      }); // ends start call
+    }; // ends wrapped start
+  }, [agentStream]); // depends on agentStream reference
+
   // Memoize context value object to prevent unnecessary re-renders of consuming components
   const contextValue: RunContextValue = useMemo(() => { // computes memoized value for consumers
     // Construct composite value merging agent stream methods with day selection state
     return { // returns context object
       state: agentStream.state, // current agent state
-      start: agentStream.start, // start planning function
+      start, // start planning function with route override injection
       stop: agentStream.stop, // stop planning function
       choose: agentStream.choose, // trade-off choose function
       reset: agentStream.reset, // reset state function
       selectedDay, // currently active day index
       setSelectedDay, // updater for selected day
     }; // closes composite context value
-  }, [agentStream, selectedDay]); // recomputes whenever stream reference or selectedDay changes
+  }, [agentStream, start, selectedDay]); // recomputes whenever stream reference, start, or selectedDay changes
 
   // Render context provider wrapping child components
   return ( // returns JSX provider element

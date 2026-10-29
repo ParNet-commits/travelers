@@ -12,7 +12,7 @@ import { money, STEP_FREE_LABEL } from "../lib/format.js"; // currency and statu
 import type { FinalItinerary, VisitItem } from "../../types/travelverse.js"; // types for itinerary and visits
 
 // Define seven distinct accessible day colors corresponding to dayIndex (0 through 6)
-export const DAY_COLORS = [ // array of color strings
+const DAY_COLORS = [ // array of color strings
   "#1d4e89", // Day 1: deep lake blue
   "#e8a33d", // Day 2: warm marigold orange
   "#2e7d32", // Day 3: forest green

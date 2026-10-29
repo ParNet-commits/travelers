@@ -117,7 +117,7 @@ export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
   // Render idle hero view only when planning has not yet executed rule checks and no final checks exist
   if (evaluatedRounds.length === EMPTY_COLLECTION_COUNT && !hasFinalChecks) { // check if completely idle
     return ( // returns idle state JSX
-      <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-4"> {/* card container */}
+      <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-4 min-h-[196px]"> {/* card container with reserved height */}
         <div className="flex items-center justify-between border-b border-line pb-3"> {/* header row */}
           <div> {/* title group */}
             <h3 className="text-sm font-semibold text-ink uppercase tracking-wider font-display"> {/* title */}
@@ -151,7 +151,7 @@ export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
 
   // Render active RuleGrid with round-by-round evaluations
   return ( // returns active RuleGrid JSX
-    <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-5"> {/* main card container */}
+    <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-5 min-h-[196px]"> {/* main card container with reserved height */}
       <div className="flex items-center justify-between border-b border-line pb-3"> {/* header row */}
         <div> {/* title group */}
           <h3 className="text-sm font-semibold text-ink uppercase tracking-wider font-display"> {/* title */}

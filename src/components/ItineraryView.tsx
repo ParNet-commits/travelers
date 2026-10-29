@@ -621,7 +621,7 @@ export function ItineraryView({ onOpenEvidence }: ItineraryViewProps): JSX.Eleme
   // Empty state guard: render friendly message when no plan has been started or produced
   if (!it) { // checks if itinerary object is missing
     return ( // returns empty state placeholder
-      <div className="bg-card border border-line rounded-2xl p-8 shadow-sm text-center space-y-3"> {/* card container */}
+      <div className="bg-card border border-line rounded-2xl p-8 shadow-sm text-center space-y-3 min-h-[175px] flex flex-col justify-center"> {/* card container with reserved height */}
         <div className="py-12 flex flex-col items-center justify-center text-center text-ink-soft space-y-2 border border-dashed border-line rounded-xl bg-sand/30"> {/* dashed box */}
           <h3 className="text-base font-semibold text-ink font-display"> {/* title */}
             Itinerary {/* section title */}
@@ -693,7 +693,7 @@ export function ItineraryView({ onOpenEvidence }: ItineraryViewProps): JSX.Eleme
   return ( // returns complete ItineraryView JSX
     <div className="space-y-6"> {/* vertical layout spacing */}
       {/* 1. Header Card: Destination, dates, travellers, lodging, meal tier, and status badges */}
-      <div className="bg-card border border-line rounded-2xl p-6 shadow-sm space-y-4"> {/* header container */}
+      <div className="bg-card border border-line rounded-2xl p-6 shadow-sm space-y-4 min-h-[175px]"> {/* header container with reserved height */}
         {/* Top row: Destination name and status badges */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4"> {/* top row */}
           <div> {/* title group */}

@@ -5,8 +5,8 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { PlanRequestBody } from "../../types/travelverse.js";
 import { agentReducer, initialAgentState } from "../lib/agentReducer.js";
-import { playGoldenRun } from "../lib/replayPlayer.js";
 import { StreamError, streamPlan } from "../lib/sseClient.js";
+import { getAdminToken, getRouteOverride } from "../lib/adminSettings.js"; // reads stored token and route overrides
 
 export function useAgentStream(opts: { adminToken?: string } = {}) {
   const [state, dispatch] = useReducer(agentReducer, initialAgentState);
@@ -50,15 +50,24 @@ export function useAgentStream(opts: { adminToken?: string } = {}) {
       dispatch({ type: "start", offline: false });
       let received = 0;
       try {
+        // Resolve admin token from options or session storage
+        const effectiveAdminToken = opts.adminToken ?? getAdminToken() ?? undefined; // admin token for x-tv-admin header
+        // Resolve route override from body or local storage
+        const effectiveRouteOverride = body.routeOverride !== undefined ? body.routeOverride : (getRouteOverride() ?? null); // model route overrides
+        // Construct effective plan request body with route override
+        const effectiveBody: PlanRequestBody = { // payload for streaming request
+          ...body, // copies request parameters
+          routeOverride: effectiveRouteOverride, // attaches route override
+        }; // ends effective payload
         await streamPlan(
-          body,
+          effectiveBody,
           {
             onEvent: (event) => {
               received += 1;
               dispatch({ type: "event", event });
             },
           },
-          { signal: ac.signal, adminToken: opts.adminToken },
+          { signal: ac.signal, adminToken: effectiveAdminToken },
         );
       } catch (err) {
         if (ac.signal.aborted) return;
@@ -69,6 +78,7 @@ export function useAgentStream(opts: { adminToken?: string } = {}) {
         const golden = goldenFor(body.presetId);
         if (golden && !clientError) {
           dispatch({ type: "start", offline: true });
+          const { playGoldenRun } = await import("../lib/replayPlayer.js");
           await playGoldenRun(golden, (event) => dispatch({ type: "event", event }), {
             speed: 1.5,
             maxGapMs: 1500,

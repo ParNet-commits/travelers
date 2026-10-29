@@ -624,6 +624,7 @@ export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Elem
         <div className="flex flex-col sm:flex-row items-center gap-3"> {/* buttons flex layout */}
           {/* Main submit button */}
           <button // submit button element
+            id="btn-plan-trip" // unique DOM id for testing
             type="submit" // form submit trigger
             disabled={isBusy} // disabled while agent is streaming or connecting
             className="w-full sm:flex-1 min-h-11 inline-flex items-center justify-center px-4 py-3 rounded-xl font-medium text-sm text-white bg-lake hover:bg-lake/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake cursor-pointer" // button styling
@@ -641,6 +642,7 @@ export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Elem
           {/* Run Control: 'Stop' while connecting or streaming */}
           {isBusy && ( // conditional render during active connection or streaming
             <button // stop button element
+              id="btn-stop-plan" // unique DOM id for testing
               type="button" // explicit button type
               onClick={stop} // invokes stop method from run context
               aria-label="Stop active planning run" // accessible button label
@@ -653,6 +655,7 @@ export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Elem
           {/* Run Control: 'New plan' after done, awaiting_user, or error */}
           {(state.status === "done" || state.status === "awaiting_user" || state.status === "error") && ( // conditional render after completion, decision, or error
             <button // new plan button element
+              id="btn-new-plan" // unique DOM id for testing
               type="button" // explicit button type
               onClick={reset} // invokes reset method from run context
               aria-label="Reset form and start a new plan" // accessible button label

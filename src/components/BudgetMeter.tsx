@@ -28,7 +28,7 @@ export function BudgetMeter(): JSX.Element { // exports BudgetMeter component
   if (!activeCosts) { // check if cost breakdown is absent
     // Render idle meter card communicating awaiting status
     return ( // returns fallback placeholder JSX
-      <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-3"> {/* card container */}
+      <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-3 min-h-[148px]"> {/* card container with reserved height */}
         <div className="flex items-center justify-between"> {/* header row */}
           <span className="text-xs font-semibold text-ink uppercase tracking-wider font-display"> {/* title */}
             Budget Meter {/* section title label */}
@@ -93,7 +93,7 @@ export function BudgetMeter(): JSX.Element { // exports BudgetMeter component
 
   // Render active BudgetMeter interface
   return ( // returns active meter JSX
-    <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-3"> {/* card container */}
+    <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-3 min-h-[148px]"> {/* card container with reserved height */}
       <div className="flex items-center justify-between"> {/* header row */}
         <span className="text-xs font-semibold text-ink uppercase tracking-wider font-display"> {/* title */}
           Budget Meter {/* section title label */}
