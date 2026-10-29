@@ -120,4 +120,46 @@ describe("SSE client + reducer", () => {
     expect(s.status).toBe("awaiting_user");
     expect(agentReducer(s, { type: "choose", optionId: "A" })).toBe(s); // no options -> unchanged
   });
+
+  it("reducer: cancelled event resets status to idle and choose sets final plan", () => {
+    let s = agentReducer(initialAgentState, { type: "start", offline: false });
+    s = agentReducer(s, { type: "event", event: ev({ type: "thinking", agent: "planner", text: "Working..." }, 0) });
+    expect(s.status).toBe("streaming");
+    s = agentReducer(s, { type: "event", event: ev({ type: "done", status: "cancelled" }, 1) });
+    expect(s.status).toBe("idle");
+
+    // Test tradeoff_required followed by choose
+    const fakeItinerary = { costs: { grandTotalMinor: 100000, currency: "USD" } } as never;
+    s = agentReducer(s, {
+      type: "event",
+      event: ev(
+        {
+          type: "tradeoff_required",
+          round: 0,
+          message: "Budget exceeded",
+          options: [
+            { id: "A", title: "Option A", summary: "Raise budget", deltaBudgetMinor: 10000, changes: ["Change 1"], itinerary: fakeItinerary },
+            { id: "B", title: "Option B", summary: "Keep budget", deltaBudgetMinor: 0, changes: ["Change 2"], itinerary: fakeItinerary },
+          ],
+        },
+        2,
+      ),
+    });
+    s = agentReducer(s, { type: "event", event: ev({ type: "done", status: "awaiting_user" }, 3) });
+    expect(s.status).toBe("awaiting_user");
+    expect(s.tradeoff?.options).toHaveLength(2);
+
+    const chosen = agentReducer(s, { type: "choose", optionId: "A" });
+    expect(chosen.status).toBe("done");
+    expect(chosen.chosenOption).toBe("A");
+    expect(chosen.final).toBe(fakeItinerary);
+    expect(chosen.events).toHaveLength(s.events.length);
+
+    // Verify that prior rule_check events are preserved through choose
+    const outcome = { ruleId: "R1" as const, status: "fail" as const, note: "Over budget" };
+    s = agentReducer(s, { type: "event", event: ev({ type: "rule_check", round: 0, outcome }, 4) });
+    const chosenWithEvents = agentReducer(s, { type: "choose", optionId: "B" });
+    expect(chosenWithEvents.chosenOption).toBe("B");
+    expect(chosenWithEvents.events.some((e) => e.type === "rule_check")).toBe(true);
+  });
 });

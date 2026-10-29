@@ -2,6 +2,10 @@
 import { useEffect, useState, type JSX } from "react"; // React hooks for state and lifecycle
 // Import Header component for brand and status bar
 import { Header } from "./components/Header.js"; // top navigation and agent status header
+// Import ReplayBanner component for sticky top replay notifications
+import { ReplayBanner } from "./components/ReplayBanner.js"; // sticky top replay notice banner
+// Import TradeoffDialog component for human-in-the-loop decisions
+import { TradeoffDialog } from "./components/TradeoffDialog.js"; // accessible trade-off decision modal
 // Import PlannerPage component for primary travel planning interface
 import { PlannerPage } from "./pages/PlannerPage.js"; // main travel planner view
 // Import RunProvider to supply shared planning context to the application
@@ -67,8 +71,13 @@ export default function App(): JSX.Element { // exports root App component
   return ( // returns root application JSX
     <RunProvider> {/* provides shared planning state across application */}
       <div className="min-h-screen flex flex-col bg-sand text-ink"> {/* full-height flex layout wrapper */}
-        {/* Navigation header with status pill and brand logo */}
-        <Header /> {/* renders persistent header */}
+        {/* Sticky top wrapper containing replay notice banner and navigation header */}
+        <div className="sticky top-0 z-30"> {/* sticky container */}
+          {/* Sticky top replay notification banner */}
+          <ReplayBanner /> {/* renders sticky replay banner when notice is active */}
+          {/* Navigation header with status pill and brand logo */}
+          <Header /> {/* renders persistent header */}
+        </div> {/* closes sticky container */}
 
         {/* Main page content area */}
         <main className="flex-1"> {/* flex growing main container */}
@@ -78,6 +87,9 @@ export default function App(): JSX.Element { // exports root App component
             <PlannerPage /> // renders main trip planner on all other routes
           )} {/* ends conditional */}
         </main> {/* closes main */}
+
+        {/* Accessible modal trade-off decision dialog */}
+        <TradeoffDialog /> {/* opens when human decision is required */}
       </div> {/* closes flex layout wrapper */}
     </RunProvider> // closes RunProvider
   ); // ends return

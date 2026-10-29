@@ -41,7 +41,7 @@ export function Header(): JSX.Element { // exports Header component
 
   // Render header navigation bar
   return ( // returns header JSX element
-    <header className="border-b border-line bg-card/80 backdrop-blur-sm sticky top-0 z-20"> {/* header container with sticky blur */}
+    <header className="border-b border-line bg-card/80 backdrop-blur-sm"> {/* header container with blur */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between"> {/* responsive content container */}
         {/* Brand identity group containing logo title and philosophy tagline */}
         <div className="flex items-baseline space-x-3"> {/* logo and tagline flex container */}

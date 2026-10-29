@@ -2,6 +2,8 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type JSX } from "react"; // React hooks for state, effect, and event types
 // Import TripRequest schema and types from shared travelverse contract
 import { CURRENCIES, Pace, TripRequest, type CurrencyCode, type TripRequest as TripRequestType } from "../../types/travelverse.js"; // shared contract schemas and types
+// Import riyaPreset generator to allow running recorded replays on error recovery
+import { riyaPreset } from "../../replay/presets.js"; // preset generator for Riya's gift
 // Import useRun hook to trigger live agent planning and inspect run status
 import { useRun } from "../state/RunProvider.js"; // global run context consumer
 
@@ -48,10 +50,47 @@ function getDayAfterIsoDate(isoDate: string): string { // helper to derive day a
   return dateObj.toISOString().slice(0, 10); // return YYYY-MM-DD slice
 } // ends getDayAfterIsoDate
 
+// Interface describing friendly error message and optional recovery action
+interface FriendlyErrorInfo { // interface for friendly error display
+  text: string; // friendly user-facing error message
+  action?: "replay" | "retry"; // optional action button
+} // ends FriendlyErrorInfo
+
+// Intent: Map technical error codes to friendly, empathetic messages per specification
+function getFriendlyError(error: { code: string; message: string } | null): FriendlyErrorInfo { // helper function
+  if (!error) return { text: "" }; // returns empty if no error
+  switch (error.code) { // switches on error code
+    case "RATE_LIMITED_CLIENT": // rate limited error code
+      return { // rate limit friendly error with replay action
+        text: "You've used this hour's live runs. Watch the recorded run instead.", // friendly message
+        action: "replay", // triggers recorded run replay
+      }; // ends RATE_LIMITED_CLIENT
+    case "LIVE_DISABLED": // live disabled error code
+      return { // live disabled friendly error with replay action
+        text: "Live planning is paused right now.", // friendly message
+        action: "replay", // triggers recorded run replay
+      }; // ends LIVE_DISABLED
+    case "INPUT_INVALID": // input validation error code
+      return { // friendly input validation error
+        text: "Some trip details need fixing.", // friendly message
+      }; // ends INPUT_INVALID
+    case "DESTINATION_NOT_FOUND": // destination not found code
+    case "NO_PLACES": // no places found code
+      return { // friendly unmapped destination error
+        text: "We couldn't map that destination. Try Udaipur or check the spelling.", // friendly message
+      }; // ends DESTINATION_NOT_FOUND / NO_PLACES
+    default: // generic fallback error code
+      return { // default message with retry action
+        text: error.message ? `${error.message} Try again.` : "Try again.", // message plus try again
+        action: "retry", // allows retrying submission
+      }; // ends default
+  } // ends switch
+} // ends getFriendlyError
+
 // Intent: Render customizable travel request form with validation against Zod schema and inline errors
 export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Element { // exports TripForm component
-  // Extract agent start action and status from run context
-  const { start, state } = useRun(); // retrieves active planning state and start function
+  // Extract agent start, stop, reset actions and status from run context
+  const { start, stop, reset, state } = useRun(); // retrieves active planning state and control functions
 
   // State for origin / departure location
   const [origin, setOrigin] = useState<string>(""); // tracks departure city input value
@@ -79,6 +118,16 @@ export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Elem
   const [notes, setNotes] = useState<string>(""); // tracks additional accessibility notes
   // State dictionary holding field-specific validation error messages
   const [errors, setErrors] = useState<Record<string, string>>({}); // maps dot-separated path to error string
+
+  // Automatically focus first invalid input when server reports INPUT_INVALID error
+  useEffect(() => { // effect hook listening for server validation errors
+    if (state.status === "error" && state.error?.code === "INPUT_INVALID") { // error check
+      const firstInvalid = document.querySelector<HTMLInputElement | HTMLTextAreaElement>( // queries first invalid input
+        'form [aria-invalid="true"], #trip-origin, #trip-destination, #trip-start-date' // selector priority list
+      ); // resolves input or null
+      firstInvalid?.focus(); // brings keyboard focus to the first invalid input
+    } // ends check
+  }, [state.status, state.error]); // runs when status or error changes
 
   // Helper function to populate all form fields from a TripRequest object
   const fillFromTrip = (trip: TripRequestType) => { // updates all internal state variables from a trip request
@@ -293,6 +342,7 @@ export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Elem
             onChange={(e: ChangeEvent<HTMLInputElement>) => setOrigin(e.target.value)} // change handler
             placeholder="e.g. Mumbai" // placeholder text
             disabled={isBusy} // disabled state
+            aria-invalid={errors["origin"] ? "true" : undefined} // accessibility invalid attribute
             className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-sand/40 text-sm text-ink placeholder:text-ink-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake transition-colors" // input styling
           /> {/* closes input */}
           {errors["origin"] && ( // conditional inline error
@@ -312,6 +362,7 @@ export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Elem
             onChange={(e: ChangeEvent<HTMLInputElement>) => setDestination(e.target.value)} // change handler
             placeholder="e.g. Udaipur" // placeholder text
             disabled={isBusy} // disabled state
+            aria-invalid={errors["destination"] ? "true" : undefined} // accessibility invalid attribute
             className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-sand/40 text-sm text-ink placeholder:text-ink-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake transition-colors" // input styling
           /> {/* closes input */}
           {errors["destination"] && ( // conditional inline error
@@ -334,6 +385,7 @@ export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Elem
             value={startDate} // controlled ISO string value
             onChange={(e: ChangeEvent<HTMLInputElement>) => handleStartDateChange(e.target.value)} // change handler with validation
             disabled={isBusy} // disabled state
+            aria-invalid={errors["startDate"] ? "true" : undefined} // accessibility invalid attribute
             className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-sand/40 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake transition-colors" // input styling
           /> {/* closes input */}
           {errors["startDate"] && ( // conditional inline error
@@ -353,6 +405,7 @@ export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Elem
             value={endDate} // controlled ISO string value
             onChange={(e: ChangeEvent<HTMLInputElement>) => handleEndDateChange(e.target.value)} // change handler with validation
             disabled={isBusy} // disabled state
+            aria-invalid={errors["endDate"] ? "true" : undefined} // accessibility invalid attribute
             className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-sand/40 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake transition-colors" // input styling
           /> {/* closes input */}
           {errors["endDate"] && ( // conditional inline error
@@ -565,23 +618,176 @@ export function TripForm({ presetTrip, onPlanStarted }: TripFormProps): JSX.Elem
         </div> {/* closes accessibility notes container */}
       </div> {/* closes accessibility section */}
 
-      {/* Submit button container */}
-      <div className="pt-3"> {/* button container */}
-        <button // submit button element
-          type="submit" // form submit trigger
-          disabled={isBusy} // disabled while agent is streaming or connecting
-          className="w-full min-h-11 inline-flex items-center justify-center px-4 py-3 rounded-xl font-medium text-sm text-white bg-lake hover:bg-lake/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake cursor-pointer" // button styling
-        > {/* button contents */}
-          {isBusy ? ( // conditional label based on active status
-            <span className="flex items-center space-x-2"> {/* spinner and label flex */}
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" /> {/* loading spinner */}
-              <span>Planning trip with agent...</span> {/* busy text */}
-            </span> // closes flex
-          ) : ( // idle label
-            <span>Plan My Trip</span> // default button label
-          )} {/* ends conditional */}
-        </button> {/* closes button */}
-      </div> {/* closes button container */}
+      {/* Run controls, status line, and friendly errors container */}
+      <div className="pt-3 space-y-3"> {/* controls container */}
+        {/* Row of Action Buttons: Submit, Stop, and New Plan */}
+        <div className="flex flex-col sm:flex-row items-center gap-3"> {/* buttons flex layout */}
+          {/* Main submit button */}
+          <button // submit button element
+            type="submit" // form submit trigger
+            disabled={isBusy} // disabled while agent is streaming or connecting
+            className="w-full sm:flex-1 min-h-11 inline-flex items-center justify-center px-4 py-3 rounded-xl font-medium text-sm text-white bg-lake hover:bg-lake/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake cursor-pointer" // button styling
+          > {/* button contents */}
+            {isBusy ? ( // conditional label based on active status
+              <span className="flex items-center space-x-2"> {/* spinner and label flex */}
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" /> {/* loading spinner */}
+                <span>Planning trip with agent...</span> {/* busy text */}
+              </span> // closes flex
+            ) : ( // idle label
+              <span>Plan My Trip</span> // default button label
+            )} {/* ends conditional */}
+          </button> {/* closes button */}
+
+          {/* Run Control: 'Stop' while connecting or streaming */}
+          {isBusy && ( // conditional render during active connection or streaming
+            <button // stop button element
+              type="button" // explicit button type
+              onClick={stop} // invokes stop method from run context
+              aria-label="Stop active planning run" // accessible button label
+              className="w-full sm:w-auto min-h-11 inline-flex items-center justify-center px-5 py-3 rounded-xl font-medium text-sm text-bad bg-bad/10 hover:bg-bad/20 border border-bad/30 shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad cursor-pointer shrink-0" // stop button styling
+            > {/* button contents */}
+              <span>Stop</span> {/* label specified in prompt */}
+            </button> // closes stop button
+          )} {/* ends isBusy check */}
+
+          {/* Run Control: 'New plan' after done, awaiting_user, or error */}
+          {(state.status === "done" || state.status === "awaiting_user" || state.status === "error") && ( // conditional render after completion, decision, or error
+            <button // new plan button element
+              type="button" // explicit button type
+              onClick={reset} // invokes reset method from run context
+              aria-label="Reset form and start a new plan" // accessible button label
+              className="w-full sm:w-auto min-h-11 inline-flex items-center justify-center px-5 py-3 rounded-xl font-medium text-sm text-ink-soft hover:text-ink bg-sand hover:bg-line border border-line shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake cursor-pointer shrink-0" // button styling
+            > {/* button contents */}
+              <span>New plan</span> {/* label specified in prompt */}
+            </button> // closes new plan button
+          )} {/* ends post-run check */}
+        </div> {/* closes buttons flex layout */}
+
+        {/* Status Line: Displays live progress, elapsed time, decision prompt, or failure */}
+        {(() => { // IIFE computing status line display
+          // Resolve friendly error mapping
+          const friendly = getFriendlyError(state.error); // maps error code
+          // Variables to hold text and color styling
+          let statusLineText: string | null = null; // status message string
+          let statusLineContainerStyle = "bg-sand text-ink-soft border-line"; // container styling
+          let statusLineDotStyle = "bg-ink-soft/40"; // indicator dot styling
+
+          if (state.status === "connecting") { // connecting status
+            statusLineText = "Connecting..."; // label specified in prompt
+            statusLineContainerStyle = "bg-lake-soft/50 text-lake border-lake/20"; // active lake styling
+            statusLineDotStyle = "bg-lake animate-pulse"; // pulsing lake dot
+          } else if (state.status === "streaming") { // streaming status
+            statusLineText = `Planning - round ${state.round}`; // label specified in prompt
+            statusLineContainerStyle = "bg-lake-soft/50 text-lake border-lake/20"; // active lake styling
+            statusLineDotStyle = "bg-lake animate-pulse"; // pulsing lake dot
+          } else if (state.status === "awaiting_user") { // awaiting user status
+            statusLineText = "Waiting for your decision"; // label specified in prompt
+            statusLineContainerStyle = "bg-marigold-soft text-warn border-marigold/30"; // warm amber styling
+            statusLineDotStyle = "bg-warn animate-pulse"; // pulsing warn dot
+          } else if (state.status === "done") { // done status
+            const elapsedMs = state.usage?.elapsedMs; // total elapsed milliseconds
+            const elapsedSecStr = elapsedMs !== undefined ? `${(elapsedMs / 1000).toFixed(1)} s` : null; // formatted seconds string
+            statusLineText = elapsedSecStr ? `Done in ${elapsedSecStr}` : "Done"; // label specified in prompt: "Done in X s"
+            statusLineContainerStyle = "bg-ok/10 text-ok border-ok/30"; // ok green styling
+            statusLineDotStyle = "bg-ok"; // solid ok dot
+          } else if (state.status === "error") { // error status
+            statusLineText = `Failed: ${friendly.text || state.error?.message || "An unexpected error occurred."}`; // label specified in prompt: "Failed: <message>"
+            statusLineContainerStyle = "bg-bad/10 text-bad border-bad/30"; // bad red styling
+            statusLineDotStyle = "bg-bad"; // solid bad dot
+          } // ends status conditions
+
+          if (!statusLineText) return null; // hides status line when idle
+
+          return ( // returns status line JSX
+            <div // status line container
+              role="status" // accessibility status role
+              aria-live="polite" // polite ARIA live announcement
+              className={`text-xs font-medium px-3.5 py-2.5 rounded-xl border flex items-center gap-2 ${statusLineContainerStyle}`} // container styling
+            > {/* status line body */}
+              <span className={`w-2 h-2 rounded-full shrink-0 ${statusLineDotStyle}`} aria-hidden="true" /> {/* dot indicator */}
+              <span className="leading-snug">{statusLineText}</span> {/* readable status text */}
+            </div> // closes status line
+          ); // ends return
+        })()} {/* ends status line IIFE */}
+
+        {/* Friendly Error Box: Surfaced when state.status === "error" with specific recovery actions */}
+        {state.status === "error" && state.error && (() => { // IIFE rendering friendly error card
+          // Resolve friendly error text and action from code
+          const friendly = getFriendlyError(state.error); // resolves friendly error mapping
+
+          // Handler to watch recorded replay run on recovery button click
+          const handleWatchReplay = async () => { // callback invoked on replay action
+            let trip = riyaPreset(); // default preset trip
+            try { // attempts loading golden request
+              const replayMod = await import("../../replay/index.js"); // loads replay index module
+              const golden = replayMod.goldenFor("riya"); // gets golden run for riya
+              if (golden?.request) { // check request presence
+                trip = golden.request; // uses golden request
+              } // ends validation
+            } catch { // fallback gracefully
+              // trip remains riyaPreset()
+            } // ends try-catch
+            fillFromTrip(trip); // fills form with preset
+            await start({ // starts replay run
+              trip, // trip payload
+              mode: "replay", // replay mode
+              presetId: "riya", // preset identifier
+              routeOverride: null, // default model routing
+            }); // ends start call
+          }; // ends handleWatchReplay
+
+          return ( // returns friendly error alert box JSX
+            <div // alert container
+              role="alert" // ARIA alert role for screen readers
+              aria-live="assertive" // assertive live announcement
+              className="p-4 rounded-xl border border-bad/30 bg-bad/10 text-ink space-y-2.5" // error box styling
+            > {/* alert body */}
+              <div className="flex items-start gap-2.5"> {/* message row */}
+                <span className="text-bad text-sm font-bold shrink-0 mt-0.5" aria-hidden="true">⚠️</span> {/* alert icon */}
+                <div className="space-y-1 flex-1 text-xs"> {/* text group */}
+                  <p className="font-semibold text-bad"> {/* title */}
+                    {state.error.code === "RATE_LIMITED_CLIENT"
+                      ? "Rate Limit Reached"
+                      : state.error.code === "LIVE_DISABLED"
+                      ? "Live Planning Paused"
+                      : state.error.code === "INPUT_INVALID"
+                      ? "Details Need Fixing"
+                      : state.error.code === "DESTINATION_NOT_FOUND" || state.error.code === "NO_PLACES"
+                      ? "Destination Not Mapped"
+                      : "Planning Error"} {/* contextual heading */}
+                  </p> {/* closes title */}
+                  <p className="text-ink leading-relaxed">{friendly.text}</p> {/* friendly message text */}
+                </div> {/* closes text group */}
+              </div> {/* closes message row */}
+
+              {/* Action Button: Replay when RATE_LIMITED_CLIENT or LIVE_DISABLED */}
+              {friendly.action === "replay" && ( // conditional render for replay action
+                <div className="pt-1"> {/* action container */}
+                  <button // watch replay button
+                    type="button" // button type
+                    onClick={handleWatchReplay} // triggers recorded run replay
+                    className="min-h-9 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-lake text-white hover:bg-lake/90 shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake cursor-pointer" // button styling
+                  > {/* button contents */}
+                    Watch the recorded run instead {/* action label */}
+                  </button> {/* closes replay button */}
+                </div> // closes action container
+              )} {/* ends replay check */}
+
+              {/* Action Button: Retry for default unexpected errors */}
+              {friendly.action === "retry" && ( // conditional render for retry action
+                <div className="pt-1"> {/* action container */}
+                  <button // retry button
+                    type="submit" // form submit trigger
+                    className="min-h-9 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-sand hover:bg-line text-ink border border-line shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lake cursor-pointer" // button styling
+                  > {/* button contents */}
+                    Try again {/* action label */}
+                  </button> {/* closes retry button */}
+                </div> // closes action container
+              )} {/* ends retry check */}
+            </div> // closes alert container
+          ); // ends return
+        })()} {/* ends friendly error IIFE */}
+      </div> {/* closes controls container */}
     </form> // closes form
   ); // ends return
 } // ends TripForm component

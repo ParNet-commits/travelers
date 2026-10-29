@@ -101,8 +101,21 @@ export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
     new Set(ruleCheckEvents.map((checkEvent) => checkEvent.round)), // extracts unique round indices
   ).sort((firstRound, secondRound) => firstRound - secondRound); // sorts numerically ascending
 
-  // Render idle hero view when planning has not yet executed rule checks
-  if (evaluatedRounds.length === EMPTY_COLLECTION_COUNT) { // check if no rounds exist yet
+  // Determine if final checks should be displayed from finalized or chosen plan
+  const hasFinalChecks = Boolean( // checks if final itinerary validation is available
+    state.final && ( // final plan must exist
+      state.chosenOption !== null || // user explicitly picked trade-off option in 'Your call'
+      evaluatedRounds.length === EMPTY_COLLECTION_COUNT // or no rounds were evaluated yet (e.g. fast trade-off)
+    ),
+  ); // ends hasFinalChecks
+
+  // Map final plan outcomes by rule ID for fast lookup
+  const finalOutcomesByRule = state.final // check if final itinerary exists
+    ? new Map(state.final.validation.outcomes.map((check) => [check.ruleId, check])) // creates lookup map
+    : null; // null if no final itinerary
+
+  // Render idle hero view only when planning has not yet executed rule checks and no final checks exist
+  if (evaluatedRounds.length === EMPTY_COLLECTION_COUNT && !hasFinalChecks) { // check if completely idle
     return ( // returns idle state JSX
       <div className="bg-card border border-line rounded-2xl p-5 shadow-sm space-y-4"> {/* card container */}
         <div className="flex items-center justify-between border-b border-line pb-3"> {/* header row */}
@@ -149,7 +162,11 @@ export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
           </p> {/* closes description */}
         </div> {/* closes title group */}
         <span className="text-[11px] font-medium text-lake bg-lake-soft border border-lake/30 px-2 py-0.5 rounded-full"> {/* badge */}
-          {evaluatedRounds.length} round{evaluatedRounds.length === 1 ? "" : "s"} {/* round count label */}
+          {hasFinalChecks // check if final checks present
+            ? evaluatedRounds.length > EMPTY_COLLECTION_COUNT // check if prior rounds also exist
+              ? `${evaluatedRounds.length} round${evaluatedRounds.length === 1 ? "" : "s"} + Final` // round count plus final
+              : "Final checks" // only final checks
+            : `${evaluatedRounds.length} round${evaluatedRounds.length === 1 ? "" : "s"}`} {/* standard round count label */}
         </span> {/* closes badge */}
       </div> {/* closes header row */}
 
@@ -184,6 +201,11 @@ export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
                       {modelBadgeName} {/* model name display */}
                     </span> // closes model badge
                   )} {/* ends model badge conditional */}
+                  {state.final && !state.chosenOption && roundNumber === state.final.round && state.final.validation.passed && ( // final round badge for regular finalized run
+                    <span className="text-[10px] font-semibold text-ok bg-ok/10 border border-ok/30 px-2 py-0.5 rounded-full flex items-center gap-1"> {/* badge */}
+                      <StatusIcon status="pass" /> Finalized {/* finalized label */}
+                    </span> // closes badge
+                  )} {/* ends final round conditional */}
                 </div> {/* closes title group */}
               </div> {/* closes round header */}
 
@@ -227,6 +249,77 @@ export function RuleGrid(): JSX.Element { // exports RuleGrid hero component
             </div> // closes round evaluation card
           ); // ends return
         })} {/* ends evaluatedRounds map */}
+
+        {/* Final checks evaluation card representing chosen tradeoff option or final plan */}
+        {hasFinalChecks && state.final && finalOutcomesByRule && ( // conditional final checks card
+          <div // final checks card container with distinctive highlight styling
+            key="final-checks" // unique React key
+            className="p-3.5 rounded-xl border border-ok/40 bg-ok/5 space-y-2.5 transition-opacity duration-500 ease-in" // card styling
+          > {/* inner content */}
+            <div className="flex items-center justify-between"> {/* header row */}
+              <div className="flex items-center gap-2"> {/* title and status group */}
+                <span className="text-xs font-bold text-ink uppercase tracking-wide"> {/* title */}
+                  {state.chosenOption ? `Final Checks (Option ${state.chosenOption})` : "Final Checks"} {/* context-aware title */}
+                </span> {/* closes title */}
+                {state.chosenOption && ( // choice indicator badge
+                  <span className="text-[10px] font-semibold text-white bg-lake px-2 py-0.5 rounded-full shadow-xs"> {/* badge */}
+                    Option {state.chosenOption} {/* option pill */}
+                  </span> // closes badge
+                )} {/* ends choice indicator */}
+                <span className="text-[10px] font-medium text-ink-soft bg-sand border border-line px-2 py-0.5 rounded-full"> {/* badge */}
+                  {shortModelName(state.final.generatedBy.model)} {/* model name */}
+                </span> {/* closes badge */}
+              </div> {/* closes title group */}
+              {state.final.validation.passed ? ( // passing status badge check
+                <span className="text-[10px] font-semibold text-ok bg-ok/10 border border-ok/30 px-2 py-0.5 rounded-full flex items-center gap-1"> {/* badge */}
+                  <StatusIcon status="pass" /> Passed {/* passing status text */}
+                </span> // closes badge
+              ) : ( // non-passing or warn status badge
+                <span className="text-[10px] font-semibold text-warn bg-warn/10 border border-warn/30 px-2 py-0.5 rounded-full flex items-center gap-1"> {/* badge */}
+                  <StatusIcon status="warn" /> Verified {/* verified label */}
+                </span> // closes badge
+              )} {/* ends status badge condition */}
+            </div> {/* closes header row */}
+
+            {/* Grid of nine rule outcome chips for the final plan */}
+            <div className="grid grid-cols-3 gap-1.5"> {/* 3-column chip layout */}
+              {ALL_RULE_IDS.map((ruleId) => { // iterate over all nine rule definitions
+                // Read outcome for this rule in final plan
+                const outcome = finalOutcomesByRule.get(ruleId); // gets outcome or undefined
+                // Determine status string
+                const status = outcome ? outcome.status : "pending"; // status string
+                // Read tooltip note or default explanation
+                const tooltipText = outcome ? outcome.note : `${ruleId}: ${RULE_SHORT[ruleId]} pending`; // tooltip text
+
+                // Determine background and border styles based on rule outcome
+                let styleClasses = "border-line bg-sand/40 text-ink-soft"; // default pending styling
+                if (status === "pass") { // passing outcome styling
+                  styleClasses = "border-ok/30 bg-ok/10 text-ok hover:bg-ok/20"; // green ok theme
+                } else if (status === "fail") { // failing outcome styling
+                  styleClasses = "border-bad/30 bg-bad/10 text-bad hover:bg-bad/20 font-semibold"; // red bad theme
+                } else if (status === "warn") { // warning outcome styling
+                  styleClasses = "border-warn/30 bg-warn/10 text-warn hover:bg-warn/20 font-semibold"; // amber warn theme
+                } else if (status === "skip") { // skipped outcome styling
+                  styleClasses = "border-line/70 bg-sand/60 text-ink-soft hover:bg-sand"; // muted sand theme
+                } // ends style conditions
+
+                // Render individual rule chip for final plan
+                return ( // returns chip JSX
+                  <div // interactive tooltip chip
+                    key={ruleId} // rule key
+                    title={tooltipText} // native browser tooltip with detailed rule note
+                    className={`flex items-center justify-between px-2 py-1.5 rounded-lg border text-xs transition-colors cursor-help ${styleClasses}`} // styling
+                  > {/* chip contents */}
+                    <span className="truncate pr-1"> {/* rule label */}
+                      {ruleId} {RULE_SHORT[ruleId]} {/* R0 Data, R1 Budget, etc. */}
+                    </span> {/* closes rule label */}
+                    <StatusIcon status={status} /> {/* status indicator icon */}
+                  </div> // closes chip
+                ); // ends return
+              })} {/* ends map */}
+            </div> {/* closes 3-column grid */}
+          </div> // closes final checks card
+        )} {/* ends hasFinalChecks conditional */}
       </div> {/* closes rounds container */}
     </div> // closes main card container
   ); // ends return

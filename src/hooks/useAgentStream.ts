@@ -12,12 +12,35 @@ export function useAgentStream(opts: { adminToken?: string } = {}) {
   const [state, dispatch] = useReducer(agentReducer, initialAgentState);
   const abortRef = useRef<AbortController | null>(null);
 
-  const stop = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-  }, []);
+  const isMountedRef = useRef<boolean>(true); // tracks component mounting to avoid state updates after unmount
 
-  useEffect(() => stop, [stop]);
+  useEffect(() => { // lifecycle hook managing component unmount cleanup
+    isMountedRef.current = true; // marks component mounted
+    return () => { // unmount cleanup callback
+      isMountedRef.current = false; // marks component unmounted
+      abortRef.current?.abort(); // aborts any active fetch or stream on unmount
+      abortRef.current = null; // clears reference
+    }; // ends cleanup
+  }, []); // runs once on mount
+
+  const stop = useCallback(() => { // stops active run and cancels streaming
+    if (abortRef.current) { // checks if active controller exists
+      abortRef.current.abort(); // aborts in-flight fetch request
+      abortRef.current = null; // clears reference
+    } // ends check
+    if (isMountedRef.current) { // verifies component is still mounted
+      dispatch({ // dispatches cancelled done event to set status to idle
+        type: "event", // event action type
+        event: { // cancelled done event payload
+          type: "done", // done event literal
+          status: "cancelled", // marks run as cancelled
+          seq: 0, // sequential counter
+          t: 0, // relative time offset
+          runId: state.runId ?? "", // run identifier or empty string
+        }, // ends event payload
+      }); // ends dispatch
+    } // ends mounted check
+  }, [state.runId]); // recomputes when runId changes
 
   const start = useCallback(
     async (body: PlanRequestBody) => {
