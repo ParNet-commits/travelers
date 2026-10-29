@@ -2,7 +2,7 @@
  * SSE transport for Vercel Node functions (Web Response + ReadableStream).
  * - every event is validated against the SSEEvent schema before it is written (invalid -> error event, never bad data)
  * - monotonically increasing seq, t = ms since run start, runId on every event
- * - ": ping" heartbeat every 15 s keeps proxies from buffering or closing the stream
+ * - ": ping" heartbeat every 5 s keeps proxies from buffering or closing the stream
  * - client disconnect (request.signal, needs supportsCancellation in vercel.json) aborts the run
  * - guarantees exactly one terminal "done" event
  */
@@ -79,7 +79,7 @@ export function createSseResponse(o: SseOptions): Response {
       };
 
       write(": open\n\n");
-      heartbeat = setInterval(() => write(": ping\n\n"), o.heartbeatMs ?? 15_000);
+      heartbeat = setInterval(() => write(": ping\n\n"), o.heartbeatMs ?? 5_000);
 
       void o
         .run(emit, controller.signal)

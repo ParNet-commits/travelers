@@ -1,6 +1,6 @@
 /**
  * POST + streamed SSE (EventSource cannot POST). Every event is Zod-validated before the UI sees it.
- * Stall watchdog: no bytes (events or ": ping" heartbeats) for 25 s -> abort with kind "stalled".
+ * Stall watchdog: no bytes (events or ": ping" heartbeats) for 90 s -> abort with kind "stalled".
  */
 import { createParser, type EventSourceMessage } from "eventsource-parser";
 import { SSEEvent, type PlanRequestBody } from "../../types/travelverse.js";
@@ -82,7 +82,7 @@ export async function streamPlan(body: PlanRequestBody, h: StreamHandlers, o: St
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  const stallMs = o.stallMs ?? 25_000;
+  const stallMs = o.stallMs ?? 90_000;
   let stalled = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const arm = () => {
